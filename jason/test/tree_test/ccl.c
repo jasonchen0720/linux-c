@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2017, <-Jason Chen->
- * Author: Jie Chen <chenjie@we-wins.com>
- * Date  : Created at 2017/11/01
+ * Copyright (c) 2021, <-Jason Chen->
+ * Author: Jie Chen <jasonchen@163.com>
+ * Date  : Created at 2021/02/21
  * Description : the implementation of customizable configuration
  */
 #include <stdlib.h> 

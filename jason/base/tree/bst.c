@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2017, We-wins
- * Author: Jie Chen <chenjie@we-wins.com>
- * Date  : 2018/11/11
+ * Copyright (c) 2021, <-Jason Chen->
+ * Author: Jie Chen <jasonchen@163.com>
+ * Date  : 2021/02/11
  * Description : the implementation of binary search tree
  */
 #include <assert.h>
