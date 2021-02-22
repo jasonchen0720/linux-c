@@ -1,27 +1,32 @@
 
 # executable program name, e.g. myprog 
-#EXECUTABLES :=
+EXECUTABLES := test
 
 # static lib name, e.g. libmylib.a
 STATIC_LIBS :=
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS := libjason.so
+SHARED_LIBS :=
 
 SRCS :=
 
-CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result #-fstack-protector-strong
+CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result#-fstack-protector-strong -g
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
 
 IFLAGS += -I$(JASON_WORK_DIR)/base/ipc/
-IFLAGS += -I$(JASON_WORK_DIR)/base/tree/
 IFLAGS += -I$(JASON_WORK_DIR)/lib/include/
+
+#ld
+LDFLAGS :=
+
+LDFLAGS += -L$(JASON_WORK_DIR)/base/ipc/
+LDFLAGS += -L$(JASON_WORK_DIR)/lib/
 # All of the sources participating in the build are defined here
 SRCS += \
-./ipcclient/client.c
+./test_ipc.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -32,23 +37,22 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=$(JASON_WORK_DIR)/base/ipc/libipc.a $(JASON_WORK_DIR)/base/tree/libtree.a
+USER_OBJS :=$(JASON_WORK_DIR)/base/ipc/libipc.a
+LIBS := -ljason -lpthread
 
-LIBS :=
-
-SHARE_LIBS := -lpthread
+SHARE_LIBS :=
 
 SHARE_LDFLAGS :=
 
 # All Target
-all: $(STATIC_LIBS) $(SHARED_LIBS)
+all: $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
 
 # Tool invocations
-#$(EXECUTABLES): $(OBJS) $(USER_OBJS)
-#	@echo 'Building target: $@'
-#	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
-#	@echo 'Finished building target: $@'
-#	@echo ' '
+$(EXECUTABLES): $(OBJS) $(USER_OBJS)
+	@echo 'Building target: $@'
+	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
+	@echo 'Finished building target: $@'
+	@echo ' '
 
 # Tool invocations
 $(STATIC_LIBS): $(OBJS) $(USER_OBJS)
