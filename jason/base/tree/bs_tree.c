@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "bst.h"
+#include "bs_tree.h"
 
 static void print_node(const struct bst_node *n)
 {

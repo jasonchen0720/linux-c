@@ -1,7 +1,7 @@
 #ifndef __CCL_H__
 #define __CCL_H__
 
-#include "bst.h"
+#include "bs_tree.h"
 
 struct ccl_pair
 {
