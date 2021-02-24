@@ -52,8 +52,11 @@ void bst_print_tree(struct bst_table *tree)
 #define bst_malloc  malloc
 #define bst_free	free
 /* 
- * Creates a new table with comparison function |compare| using parameter |compare|
- * Returns the new table or Returns |NULL| if memory allocation failed
+ * @comparator: comparison function.
+ * @searcher  : comparison function for searching.
+ * @printer   : printer for a bst node.
+ * @height    : max height of tree.
+ * Returns the new table or Returns NULL if memory allocation failed
  */
 struct bst_table *bst_create(bst_comparator *comparator, bst_searcher *searcher, bst_printer *printer, unsigned int height)
 {
@@ -73,7 +76,7 @@ struct bst_table *bst_create(bst_comparator *comparator, bst_searcher *searcher,
   	return tree;
 }
 
-/* Search |tree| for an item matching |item|, and return it if found, Otherwise return |NULL| */
+/* Search @tree for a node matching @item, and return it if found, Otherwise return NULL */
 struct bst_node * bst_search (const struct bst_table *tree, const void *item)
 {
 	int cmp;
@@ -89,10 +92,14 @@ struct bst_node * bst_search (const struct bst_table *tree, const void *item)
 	}
   	return NULL;
 }
+/*
+ * Insert a node into @tree, and return the duplicate node, If found, Otherwise return @n itself.
+ * Will fail to insert only when duplicate node existed.
+ */
 struct bst_node *bst_insert (struct bst_table *tree, struct bst_node *n)
 {
-  	struct bst_node *t, *p; /* Current node in search and its parent. */
-  	int dir;                /* Side of |q| on which |p| is located. */
+  	struct bst_node *t, *p;
+  	int dir;                
 	int cmp;
   	for (p = NULL, t = tree->bst_root; t != NULL; p = t, t = t->bst_link[dir]) {
       	cmp = tree->bst_compare(n, t);
@@ -109,13 +116,15 @@ struct bst_node *bst_insert (struct bst_table *tree, struct bst_node *n)
     	tree->bst_root = n;
   	return n;
 }
-/* Deletes from |tree| and returns an item matching |item|.
-   Returns a null pointer if no matching item found. */
+/* 
+ * Deletes from @tree and returns node matching item.
+ * Returns a null pointer if no matching item found. 
+ */
 struct bst_node *bst_delete(struct bst_table *tree, const void *item)
 {
-  	struct bst_node *d, *p; /* Node to delete and its parent. */
-  	int cmp;                /* Comparison between |p->_data| and |item|. */
-  	int dir;                /* Side of |q| on which |p| is located. */
+  	struct bst_node *d, *p;
+  	int cmp;
+  	int dir;
   	d = (struct bst_node *) &tree->bst_root;
   	for (cmp = -1; cmp != 0; cmp = tree->bst_search(item, d)) {
       	dir = cmp > 0;
@@ -149,7 +158,7 @@ struct bst_node *bst_delete(struct bst_table *tree, const void *item)
 	tree->bst_generation++;
 	return d;
 }
-/* Converts |tree| into left slanted tree */
+/* Converts @tree into left slanted tree */
 static void slant_left (struct bst_table *tree)
 {
   	struct bst_node *q, *p;
@@ -171,11 +180,10 @@ static void slant_left (struct bst_table *tree)
   	}
 }
 
-/* Performs a compression transformation |count| times, starting at |root| */
+/* Performs a compression transformation @count times, starting at root */
 static void slant_left_back (struct bst_node *root, unsigned long count)
 {
-	assert (root != NULL);
-	struct bst_table *tree = (struct bst_table *)root;
+	//struct bst_table *tree = (struct bst_table *)root;
 	while (count--) {
 		struct bst_node *red = root->bst_link[0];
 		//print_entry(red);
@@ -188,7 +196,7 @@ static void slant_left_back (struct bst_node *root, unsigned long count)
     }	
 }
 
-/* Converts |tree|, which must be in the shape of a vine, into a balanced tree */
+/* Converts @tree, which must be in the shape of a vine, into a balanced tree */
 static void slant_back (struct bst_table *tree)
 {
   	unsigned long vine;   /* Number of nodes in main vine. */
@@ -209,8 +217,7 @@ static void slant_back (struct bst_table *tree)
   	height = 1 + (leaves > 0);
   	while (vine > 1) {
 		printf("vine: %lu\n", vine);
-      	slant_left_back ((struct bst_node *) &tree->bst_root, vine >> 1/*vine / 2*/);
-      	//vine /= 2;
+      	slant_left_back ((struct bst_node *) &tree->bst_root, vine >> 1);
       	vine >>= 1;
       	height++;
     }
@@ -220,11 +227,12 @@ static void slant_back (struct bst_table *tree)
     }
 }
 
-/* Balances |tree|.
-   Ensures that no simple path from the root to a leaf has more than |tree->bst_max_height| nodes. */
+/* 
+ * Balances @tree.
+ * Ensures that no simple path from the root to a leaf has more than @tree->bst_max_height nodes. 
+ */
 void bst_balance (struct bst_table *tree)
 {
-	assert (tree != NULL);
 	bst_print_tree(tree);
 	slant_left (tree);
 	slant_back (tree);
@@ -232,8 +240,11 @@ void bst_balance (struct bst_table *tree)
 	bst_print_tree(tree);
 }
 
-/* Frees storage allocated for |tree|.
-   If |destroy != NULL|, applies it to each data item in inorder. */
+/* 
+ * Frees storage allocated for @tree.
+ * @destroyer: used to destroy each node in inorder.
+ * @cleanall: if true, clean the destroy.
+ */
 void bst_destroy(struct bst_table *tree, bst_destroyer *destroyer, int cleanall)
 {
 	
@@ -267,7 +278,7 @@ void bst_destroy(struct bst_table *tree, bst_destroyer *destroyer, int cleanall)
 	tree->bst_generation = 0;
 	tree->bst_root = NULL;
 }
-/* Refreshes the stack of parent pointers in |iterator| and updates its generation number. */
+/* Refreshes the stack of parent pointers in @iterator and updates its generation number. */
 static void bst_iterator_refresh (struct bst_iterator *iterator)
 {
 	iterator->bst_generation = iterator->bst_table->bst_generation;
@@ -285,7 +296,7 @@ static void bst_iterator_refresh (struct bst_iterator *iterator)
     }
 }
 
-/* Initializes |iterator| for use with |tree| and selects the null node. */
+/* Initializes @iterator for use with @tree and selects the null node. */
 struct bst_iterator * bst_iterator_init(struct bst_table *tree)
 {
 	struct bst_iterator *iterator = (struct bst_iterator *)bst_malloc(sizeof(struct bst_iterator));
@@ -311,8 +322,8 @@ void bst_iterator_free(struct bst_iterator *iterator)
 	}
 }
 
-/* Initializes |iterator| for |tree| and selects and returns a pointer to its least-valued item.
-   Returns |NULL| if |tree| contains no nodes. */
+/* Initializes @iterator for @tree and selects and returns a pointer to its least-valued node.
+   Returns NULL if @tree contains no nodes. */
 struct bst_node * bst_iterator_first (struct bst_iterator *iterator, struct bst_table *tree)
 {
 	struct bst_node *x;
@@ -334,8 +345,8 @@ struct bst_node * bst_iterator_first (struct bst_iterator *iterator, struct bst_
 	return x;
 }
 
-/* Initializes |iterator| for |tree| and selects and returns a pointer to its greatest-valued item.
-   Returns |NULL| if |tree| contains no nodes. */
+/* Initializes @iterator for @tree and selects and returns a pointer to its greatest-valued node.
+   Returns NULL if @tree contains no nodes. */
 struct bst_node * bst_iterator_last (struct bst_iterator *iterator, struct bst_table *tree)
 {
 	struct bst_node *x;
@@ -358,15 +369,14 @@ struct bst_node * bst_iterator_last (struct bst_iterator *iterator, struct bst_t
 }
 
 /* 
- * Searches for |item| in |tree|.
- * If found, initializes |iterator| to the item found and returns the item as well.
- * If there is no matching item, initializes |iterator| to the null item and returns |NULL|. 
+ * Searches for @item in @tree.
+ * If found, initializes @iterator to the item found and returns the item as well.
+ * If there is no matching node, initializes @iterator to the null node and returns NULL. 
  */
 struct bst_node * bst_iterator_find (struct bst_iterator *iterator, struct bst_table *tree, void *item)
 {
 	int cmp;
 	struct bst_node *p, *q;
-	assert (iterator != NULL && tree != NULL && item != NULL);
 	iterator->bst_table = tree;
 	iterator->bst_height = 0;
 	iterator->bst_generation = tree->bst_generation;
@@ -393,16 +403,15 @@ struct bst_node * bst_iterator_find (struct bst_iterator *iterator, struct bst_t
 }
 
 /*
- * Attempts to insert |item| into |tree|.
- * If |item| is inserted successfully, it is returned and |iterator| is initialized to its location.
- * If a duplicate is found, it is returned and |iterator| is initialized to its location. 
+ * Attempts to insert @n into @tree.
+ * If @n is inserted successfully, it is returned and @iterator is initialized to its location.
+ * If a duplicate is found, it is returned and @iterator is initialized to its location. 
  * No replacement of the item occurs. 
  */
 struct bst_node * bst_iterator_insert(struct bst_iterator *iterator, struct bst_table *tree, struct bst_node *n)
 {
 	int cmp;
 	struct bst_node **q;
-	assert (tree != NULL && n != NULL);
 	iterator->bst_table = tree;
 	iterator->bst_height = 0;
 	q = &tree->bst_root;
@@ -427,8 +436,8 @@ struct bst_node * bst_iterator_insert(struct bst_iterator *iterator, struct bst_
   	return (*q);
 }
 /* 
- * Returns the next data item in inorder within the tree being traversed with |iterator|,
- * or if there are no more data items returns |NULL|. 
+ * Returns the next data item in inorder within the tree being traversed with @iterator,
+ * or if there are no more data items returns NULL. 
  */
 struct bst_node *bst_iterator_next (struct bst_iterator *iterator)
 {
@@ -471,8 +480,8 @@ struct bst_node *bst_iterator_next (struct bst_iterator *iterator)
 }
 
 /* 
- * Returns the previous data item in inorder within the tree being traversed with |iterator|,
- * or if there are no more data items returns |NULL|. 
+ * Returns the previous node in inorder within the tree being traversed with @iterator,
+ * or if there are no more node returns NULL. 
  */
 struct bst_node *bst_iterator_prev (struct bst_iterator *iterator)
 {
@@ -516,7 +525,7 @@ struct bst_node *bst_iterator_prev (struct bst_iterator *iterator)
   	return x;
 }
 
-/* Returns |iterator|'s current item. */
+/* Returns @iterator's current node. */
 struct bst_node *bst_iterator_cur (struct bst_iterator *iterator)
 {
 	return iterator->bst_node;
