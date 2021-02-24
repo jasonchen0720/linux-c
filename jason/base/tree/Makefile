@@ -18,7 +18,8 @@ IFLAGS := \
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./bs_tree.c
+./bs_tree.c \
+./rb_tree.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
