@@ -8,6 +8,8 @@ struct ipc_core;
 struct ipc_server
 {
 	int sock;
+	void *arg;
+	int (*proxy)(int, void *);
 	int (*handler)(struct ipc_core *, struct ipc_server *);
 	int identity;
 	struct ipc_peer *peer;
@@ -79,4 +81,5 @@ int ipc_server_notify(const struct ipc_server *cli, unsigned long topic, int msg
 
 int ipc_server_setopt(int opt, void *arg);
 
+int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg);
 #endif

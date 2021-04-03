@@ -3,10 +3,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/socket.h>
 
 #include "ipc_client.h"
 #include "ipc_server.h"
 #include "client.h"
+static int sig_pipe = 0;
 static client_handle *handle = NULL;
 static int indicate_msg_cb(int msg_id, void *data, int size, void *arg)
 {
@@ -56,7 +60,44 @@ static void *  monitor_task(void *arg)
 		usleep(1000*1000);
 	}
 	return NULL;
-}				
+}
+static void signal_handler(int sig)
+{
+	send(sig_pipe, &sig, sizeof(sig), MSG_DONTWAIT | MSG_NOSIGNAL);
+}
+static int sig_proxy_handler(int fd, void *arg)
+{
+	int sig;
+	do {
+		ev_read:
+		if (read(fd, &sig, sizeof(sig)) > 0)
+			break;
+		if (errno == EINTR)
+			goto ev_read;
+		return -1;
+	} while (1);
+	switch (sig) {
+		case SIGALRM:
+			printf("Alrm... \n");
+			alarm(1);
+			break;
+		default:
+			break;
+	}
+	return 0;
+}
+int sig_proxy_init()
+{
+	int pipe[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pipe))
+		return -1;
+	sig_pipe = pipe[1];
+	signal(SIGALRM, signal_handler);
+	alarm(1);
+	printf("event proxy init success. \n");
+	return pipe[0];
+}
+
 int main(int argc, char *argv[])
 {
 	unsigned long mask;
@@ -69,7 +110,8 @@ int main(int argc, char *argv[])
 			ipc_server_setopt(IPC_SEROPT_SET_MANAGER, ipcClientManager);
 		
 			pthread_create(&task_pid, NULL, monitor_task, NULL);
-		
+			int fd = sig_proxy_init();
+			ipc_server_proxy(fd, sig_proxy_handler, NULL);
 			if (ipc_server_run() < 0)
 			{
 				printf("run error\n");

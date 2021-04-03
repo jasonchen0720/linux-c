@@ -49,10 +49,10 @@ do {								\
 do {									\
 	if (manager)manager(sevr, cmd);		\
 } while (0)
-/* get_index - calculate the index of the highest bit 1 with the mask
+/* bit_index - calculate the index of the highest bit 1 with the mask
  * @mask: mask to calculate
  */
-static inline int get_index(unsigned long mask)
+static inline int bit_index(unsigned long mask)
 {
     int i;
     i = -1;
@@ -172,32 +172,32 @@ static int ipc_handler_invoke(struct ipc_core *core, int sock, struct ipc_msg *m
 	}
 	return 0;
 }
-#define report(sevr, msg) 		\
-do {							\
+#define ipc_report(sevr, msg) 		\
+do {								\
 	if (send((sevr)->sock, (void *)(msg),  __data_len(msg), MSG_NOSIGNAL | MSG_DONTWAIT) < 0)	\
 		IPCLOG("send error:c[%d],s:%d, errno:%d\n", (sevr)->identity, (sevr)->sock, errno);	 	\
 } while (0)
-#define broadcast(node, head, msg)			\
- do {										\
- 	(msg)->msg_id |= IPC_MSG_TOKEN;			\
-	list_for_each_entry(node, head, list) {	\
-		report(node->sevr, msg);			\
-	}										\
+#define ipc_do_broadcast(node, head, msg)		\
+ do {											\
+ 	(msg)->msg_id |= IPC_MSG_TOKEN;				\
+	list_for_each_entry(node, head, list) {		\
+		ipc_report(node->sevr, msg);			\
+	}											\
 } while (0) 
-#define unicast(node, head, msg, to)		\
-do {										\
-	(msg)->msg_id |= IPC_MSG_TOKEN;			\
-	list_for_each_entry(node, head, list) {	\
-		if (node->sevr->identity == (to)) {	\
-			report(node->sevr, msg);		\
-			break;							\
-		}									\
-	}										\
+#define ipc_do_unicast(node, head, msg, to)		\
+do {											\
+	(msg)->msg_id |= IPC_MSG_TOKEN;				\
+	list_for_each_entry(node, head, list) {		\
+		if (node->sevr->identity == (to)) {		\
+			ipc_report(node->sevr, msg);		\
+			break;								\
+		}										\
+	}											\
 } while (0)
-#define notify(sevr, msg)			\
-do {								\
-	(msg)->msg_id |= IPC_MSG_TOKEN;	\
-	report(sevr, msg);				\
+#define ipc_do_notify(sevr, msg)		\
+do {									\
+	(msg)->msg_id |= IPC_MSG_TOKEN;		\
+	ipc_report(sevr, msg);				\
 } while (0)
 /**
  * ipc_release - release resources occupied by ipc handle
@@ -338,12 +338,16 @@ static int ipc_broker_publish(struct ipc_core *core, struct ipc_msg * msg)
 		return 0;
 
 
-	int i = get_index(notify->topic);
+	int i = bit_index(notify->topic);
 	if (notify->to == IPC_TO_BROADCAST)
-		broadcast(node, &core->node_hb[i], msg);
+		ipc_do_broadcast(node, &core->node_hb[i], msg);
 	else
-		unicast(node, &core->node_hb[i], msg, notify->to);
+		ipc_do_unicast(node, &core->node_hb[i], msg, notify->to);
 	return 0;
+}
+static int ipc_proxy_socket_handler(struct ipc_core *core, struct ipc_server *ipc)
+{
+	return ipc->proxy(ipc->sock, ipc->arg);
 }
 /**
  * ipc_common_socket_handler - handler for client handle that use continuous stream socket connection
@@ -728,7 +732,7 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
 		} else dynamic = 1;
 	}
 	notify_pack(ipc_msg, to, topic, msg_id, data, size);
-	int i = get_index(topic);
+	int i = bit_index(topic);
 	ipc_mutex_lock(core->mutex);
 	/*
 	 * Node hash bucket has not been initialized.
@@ -737,9 +741,9 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
 	if (!core->node_hb)
 		goto unlock;
 	if (to == IPC_TO_BROADCAST)
-		broadcast(node, &core->node_hb[i], ipc_msg);
+		ipc_do_broadcast(node, &core->node_hb[i], ipc_msg);
 	else
-		unicast(node, &core->node_hb[i], ipc_msg, to);
+		ipc_do_unicast(node, &core->node_hb[i], ipc_msg, to);
 unlock:
 	ipc_mutex_unlock(core->mutex);
 	if (dynamic)
@@ -777,7 +781,7 @@ int ipc_server_notify(const struct ipc_server *cli, unsigned long topic, int msg
 		} else dynamic = 1;
 	}
 	notify_pack(ipc_msg, IPC_TO_NOTIFY, topic, msg_id, data, size);
-	notify(cli, ipc_msg);
+	ipc_do_notify(cli, ipc_msg);
 	if (dynamic)
 		ipc_free_msg(ipc_msg);
 	return 0;
@@ -821,6 +825,22 @@ static inline int set_opt_buf(struct ipc_core *core, void *arg)
 		return -1;
 	core->buf = alloc_buf(*size);
 	return core->buf ? 0: -1;
+}
+int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg)
+{
+	struct ipc_core *core = global_core;
+	if (fd <= 0)
+		return -1;
+	if (!proxy)
+		return -1;
+	if (!core)
+		return -1;
+	struct ipc_server *ipc = ipc_create(core, 0ul, 0, fd, ipc_proxy_socket_handler);
+	if (!ipc)
+		return -1;
+	ipc->arg = arg;
+	ipc->proxy = proxy;
+	return 0;
 }
 /**
  * ipc_server_setopt - used to set ipc core options,
