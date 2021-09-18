@@ -1,9 +1,13 @@
 /*
  * Copyright (c) 2017, <-Jason Chen->
- * Version: 1.1.0. upgrade at 2020/05/20, update from 1.0.x to 1.1.0
- *			What is new in 1.1.0? 
- *			Works more efficiently and fix some extreme bugs.
- * Author: Jie Chen <jasonchen@163.com>
+ * Version: 1.1.1 - 20210917
+ *                - Add ipc timing
+ *                - Fix segment fault while doing core exit.
+ *				  - Rename some definitions.
+ *			1.1.0 - 20200520, update from  to 1.0.x
+ *				  - What is new in 1.1.0? Works more efficiently and fix some extreme internal bugs.
+ *			1.0.x - 20171101
+ * Author: Jie Chen <jasonchen0720@163.com>
  * Note  : This program is used for libipc client interface implementation
  * Date  : Created at 2017/11/01
  */
@@ -277,7 +281,7 @@ int ipc_client_publish(struct ipc_client *client,
 	int dynamic = 0;
 	char buffer[IPC_NOTIFY_MSG_MAX_SIZE] = {0};
 	struct ipc_msg *msg = (struct ipc_msg *)buffer;
-	if (!ntf_buf_abundant(sizeof(buffer), size)) {
+	if (!ipc_notify_space_check(sizeof(buffer), size)) {
 		msg = ipc_alloc_msg(sizeof(struct ipc_notify) + size);
 		if (!msg) {
 			IPCLOG("Client publish memory failed.\n");

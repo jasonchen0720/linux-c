@@ -56,8 +56,6 @@ struct ipc_negotiation
 	unsigned int 	buf_size;
 };
 #define IPC_NOTIFY_MSG_MAX_SIZE 1024
-#define msg_buf_abundant(max, size)	((max) >= sizeof(struct ipc_msg) + (size))
-#define ntf_buf_abundant(max, size)	msg_buf_abundant(max, sizeof(struct ipc_notify) + size)
 #define users_msg(msg)				((msg)->msg_id < IPC_MSG_SDK)
 #define topic_isset(pr, topic) 		((pr)->mask & (topic))
 #define __data_len(pr)					(sizeof(*(pr)) + (pr)->data_len)

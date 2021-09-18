@@ -1,7 +1,7 @@
 #ifndef __IPC_SERVER_H__
 
 #define __IPC_SERVER_H__
-
+#include <time.h>
 #include "list.h"
 #include "ipc_common.h"
 struct ipc_core;
@@ -32,7 +32,34 @@ struct ipc_peer
 	int					 private_identity;
 	void 				*private_data;
 };
-/* 
+struct ipc_timing
+{
+	int cycle;
+	struct timeval tv;
+	struct timeval expire;
+	void *arg;
+	int (*handler)(struct ipc_timing *);
+	struct list_head list;
+};
+/*
+ * ipc_timing_initializer() - initialize struct ipc_timing.
+ * @t: client handle.If you want to report message, need this handle.
+ * @c: Indicate if this timing event is cyclic.
+ * @s: Timeout time - Seconds part.
+ * @u: Timeout time - Microsecond part.
+ * @a: Private data or argument.
+ * @h: Private handler to process the timing event.
+ */
+#define ipc_timing_initializer(t, c, s, u, a, h) 	\
+	do {											\
+		(t)->cycle 		= (c);						\
+		(t)->tv.tv_sec 	= (s);						\
+		(t)->tv.tv_usec = (u);						\
+		(t)->arg 		= (a);						\
+		(t)->handler 	= (h);						\
+		init_list_head(&(t)->list);					\
+	} while (0)
+/*
  * int ipc_server_handler(struct ipc_msg *msg);
  * The handler is used to process ipc messages.
  * @msg : ipc msg to the server
@@ -82,4 +109,8 @@ int ipc_server_notify(const struct ipc_server *cli, unsigned long topic, int msg
 int ipc_server_setopt(int opt, void *arg);
 
 int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg);
+int ipc_timing_register(struct ipc_timing *timing);
+int ipc_timing_unregister(struct ipc_timing *timing);
+int ipc_timing_refresh(struct ipc_timing *timing, const struct timeval *tv);
+int ipc_timing_release();
 #endif

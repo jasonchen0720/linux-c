@@ -44,6 +44,14 @@ enum {
 };
 #define IPC_FLAG_EXPECT_REPLY	(1u << IPC_BIT_REPLY)
 #define ipc_subscribed(sr,t)		((sr)->peer->mask & (t))
+/*
+ * ipc_msg_space_check() - Used to check if the buffer space %max is enough for the ipc message. 
+ */
+#define ipc_msg_space_check(max, size)		((max) >= sizeof(struct ipc_msg) + (size))
+/*
+ * ipc_notify_space_check() - Used to check if the buffer space %max is enough for the notify message. 
+ */
+#define ipc_notify_space_check(max, size)	ipc_msg_space_check(max, sizeof(struct ipc_notify) + size)
 struct ipc_msg * ipc_alloc_msg(unsigned int size);
 void ipc_free_msg(struct ipc_msg *msg);
 #endif
