@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/un.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -44,7 +45,7 @@ static struct ipc_core global_core =
 	.initialized = 0,
 };
 #define current_core() 	(&global_core)
-#define uninitialized(c)	(!(c) || !(c)->initialized)
+#define initialized_core(c)	((c) && (c)->initialized)
 #define __LOGTAG__ (current_core()->server)
 #define IPCLOG(format,...) IPC_LOG("[%s]:%s(%d): "format"\n", __LOGTAG__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #define ipc_mutex_lock(mutex)				\
@@ -86,6 +87,26 @@ static inline int bit_count(unsigned long mask)
 	}
 	return i;
 }
+static const char * peer_name(struct ipc_server *sevr)
+{
+	static char name[32];
+	char path[32];
+	sprintf(path, "/proc/%d/comm", sevr->identity);
+	int fd = open(path, O_RDONLY);
+	if (fd < 0)
+		return "dummy";
+	int size = read(fd, name, sizeof(name) -1);
+	if (size <= 0) {
+		close(fd);
+		return "dummy";
+	}
+	close(fd);
+	if (name[size - 1] == '\n')
+		name[size - 1] = '\0';
+	else
+		name[size] = '\0';
+	return (const char *)name;
+}
 /**
  * peer_sync - the callback synchronize message from client, initialize |sevr->peer->node|
  * @core: ipc core of server
@@ -104,21 +125,6 @@ static inline void peer_sync(struct ipc_core *core, struct ipc_server *sevr)
 		}
 	}
 	ipc_mutex_unlock(core->mutex);
-}
-/*
- * node_hb_init - to initialize hash bucket for supporting of asynchronous message to clients
- * @core: ipc core of server
- */
-static inline int node_hb_init(struct ipc_core *core)
-{
-	core->node_hb = (struct list_head *)malloc((sizeof(unsigned long) << 3) * sizeof(struct list_head));
-	if (!core->node_hb)
-		return -1;
-	int i;
-	for (i = 0; i < sizeof(unsigned long) << 3; i++)
-		init_list_head(&core->node_hb[i]);
-	IPCLOG("node hash bucket initialized.\n");
-	return 0;
 }
 /**
  * peer_create - to initialize a peer which is used to support asynchronous message to clients
@@ -150,7 +156,21 @@ static struct ipc_peer * peer_create(unsigned long mask)
 	}
 	return peer;
 }
-
+/*
+ * node_hash_bucket_init - to initialize hash bucket for supporting of asynchronous message to clients
+ * @core: ipc core of server
+ */
+static inline int node_hash_bucket_init(struct ipc_core *core)
+{
+	core->node_hb = (struct list_head *)malloc((sizeof(unsigned long) << 3) * sizeof(struct list_head));
+	if (!core->node_hb)
+		return -1;
+	int i;
+	for (i = 0; i < sizeof(unsigned long) << 3; i++)
+		init_list_head(&core->node_hb[i]);
+	IPCLOG("node hash bucket initialized.\n");
+	return 0;
+}
 /**
  * sock_opts - set socket options
  * @sock: socket to set
@@ -298,7 +318,7 @@ static struct ipc_server * ipc_create(struct ipc_core *core, unsigned long mask,
 		}
 		ipc_mutex_lock(core->mutex);
 		if (!core->node_hb) {
-			if (node_hb_init(core) < 0) {
+			if (node_hash_bucket_init(core) < 0) {
 				free(sevr);
 				ipc_mutex_unlock(core->mutex);
 				return NULL;
@@ -342,8 +362,8 @@ static int ipc_broker_unreg(struct ipc_core *core, struct ipc_server *sevr, stru
 		return -1;
 	if (!sevr->peer->node)
 		return -1;
-	IPCLOG("client %d exit, sk:%d, mask:%04lx\n",
-								sevr->identity,sevr->sock, sevr->peer->mask);
+	IPCLOG("client %d:%s exit, sk:%d, mask:%04lx\n",
+								sevr->identity,  peer_name(sevr), sevr->sock, sevr->peer->mask);
 	send_msg(sevr->sock, msg);
 	ipc_release(core, sevr);
 	return 0;
@@ -433,7 +453,7 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 		return 0;
 	}
 	if (len == 0) {
-		IPCLOG("client: %d shutdown sk:%d\n", ipc->identity, ipc->sock);
+		IPCLOG("client %d:%s shutdown sk:%d\n", ipc->identity, peer_name(ipc), ipc->sock);
 		goto __error;
 	} else if (errno == EINTR) {
 		goto __recv;
@@ -471,8 +491,8 @@ static int ipc_broker_register(struct ipc_core *core, int sock, struct ipc_msg *
 		send_msg(sock, msg);
 		goto __error;
 	}
-	IPCLOG("%d register: client %d ,sk: %d, mask: %04lx\n",
-					reg->identity, broker->identity, broker->sock, broker->peer->mask);
+	IPCLOG("%d register, client %d:%s, sk: %d, mask: %04lx\n",
+					reg->identity, broker->identity, peer_name(broker), broker->sock, broker->peer->mask);
 	/*
 	 * In this period, do some negotiation.
 	 * max IPC buffer size is always required
@@ -631,7 +651,7 @@ int ipc_timing_register(struct ipc_timing *timing)
 	struct ipc_timing *tmp;
 	struct list_head *p;
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	timing_refresh(timing, &timing->tv);
 	ipc_mutex_lock(core->mutex);
@@ -648,7 +668,7 @@ int ipc_timing_register(struct ipc_timing *timing)
 int ipc_timing_unregister(struct ipc_timing *timing)
 {
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	ipc_mutex_lock(core->mutex);
 	list_del_init(&timing->list);
@@ -666,7 +686,7 @@ int ipc_timing_refresh(struct ipc_timing *timing, const struct timeval *tv)
 int ipc_timing_release()
 {
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	struct ipc_timing *timing, *tmp;
 	ipc_mutex_lock(core->mutex);
@@ -781,7 +801,7 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg*))
 int ipc_server_run()
 {
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	/*
 	 * The IPC buffer can be set by ipc_server_setopt(),
@@ -806,7 +826,7 @@ int ipc_server_exit()
 	struct ipc_server *tmp;
 	struct ipc_timing *timing, *ttmp;
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	core->terminated = 1;
 	list_for_each_entry_safe(pos, tmp, &core->head, list) {
@@ -854,7 +874,7 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
 	struct ipc_node *node;
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	if (!topic_check(topic))
 		return -1;
@@ -963,7 +983,7 @@ static inline int set_opt_buf(struct ipc_core *core, void *arg)
 int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg)
 {
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	if (fd <= 0)
 		return -1;
@@ -987,7 +1007,7 @@ int ipc_server_setopt(int opt, void *arg)
 	if (!arg)
 		return -1;
 	struct ipc_core *core = current_core();
-	if (uninitialized(core))
+	if (!initialized_core(core))
 		return -1;
 	switch (opt) {
 	case IPC_SEROPT_SET_FILTER:

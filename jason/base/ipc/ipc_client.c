@@ -15,6 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/un.h>
 #include <sys/time.h>
 #include <sys/select.h>
@@ -22,8 +23,28 @@
 #include "ipc_client.h"
 #include "ipc_log.h"
 #include "ipc_base.h"
-#define __LOGTAG__ __FILE__
-#define IPCLOG(format,...) IPC_LOG("[%d]:%s(%d): "format"\n", getpid(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define __LOGTAG__ comm_name()
+#define IPCLOG(format,...) IPC_LOG("[%s]:%s(%d): "format"\n", comm_name(), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+static const char * comm_name()
+{
+	static char name[32]= {0};
+	if (name[0])
+		return (const char *)name;
+	int fd = open("/proc/self/comm", O_RDONLY);
+	if (fd < 0)
+		return "dummy";
+	int size = read(fd, name, sizeof(name) -1);
+	if (size <= 0) {
+		close(fd);
+		return "dummy";
+	}
+	close(fd);
+	if (name[size - 1] == '\n')
+		name[size - 1] = '\0';
+	else
+		name[size] = '\0';
+	return (const char *)name;
+}
 /**
  * ipc_receive - receive some bytes from socket
  * @sock: connected socket fd

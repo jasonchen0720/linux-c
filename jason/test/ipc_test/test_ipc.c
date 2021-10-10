@@ -78,7 +78,7 @@ static int sig_proxy_handler(int fd, void *arg)
 	} while (1);
 	switch (sig) {
 		case SIGALRM:
-			printf("Alrm... \n");
+			//printf("Alrm... \n");
 			alarm(1);
 			break;
 		default:
@@ -97,7 +97,15 @@ int sig_proxy_init()
 	printf("event proxy init success. \n");
 	return pipe[0];
 }
-
+static struct ipc_timing test_timing;
+time_t ti = 0;
+static int timing_handler(struct ipc_timing *t)
+{
+	if (!ti)
+		ti = time(NULL);
+	printf("Timing:%ld\n", time(NULL) - ti);
+	return 0;
+}
 int main(int argc, char *argv[])
 {
 	unsigned long mask;
@@ -112,6 +120,8 @@ int main(int argc, char *argv[])
 			pthread_create(&task_pid, NULL, monitor_task, NULL);
 			int fd = sig_proxy_init();
 			ipc_server_proxy(fd, sig_proxy_handler, NULL);
+			ipc_timing_initializer(&test_timing,1,6,0,NULL,timing_handler);
+			ipc_timing_register(&test_timing);
 			if (ipc_server_run() < 0)
 			{
 				printf("run error\n");
