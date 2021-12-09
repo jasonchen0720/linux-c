@@ -1,3 +1,5 @@
+include $(JASON_WORK_DIR)/config.mk
+include $(JASON_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 #EXECUTABLES :=
@@ -10,18 +12,23 @@ SHARED_LIBS := libjason.so
 
 SRCS :=
 
-CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result #-fstack-protector-strong
+CFLAGS += 
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
 
+ifeq ($(CONFIG_IPC),y)
 IFLAGS += -I$(JASON_WORK_DIR)/base/ipc/
+endif
+ifeq ($(CONFIG_TREE),y)
 IFLAGS += -I$(JASON_WORK_DIR)/base/tree/
+endif
 IFLAGS += -I$(JASON_WORK_DIR)/lib/include/
 # All of the sources participating in the build are defined here
-SRCS += \
-./ipcclient/client.c
+ifeq ($(CONFIG_IPC),y)
+SRCS += ./ipcclient/client.c
+endif
 
 %.o: ./%.c
 	@echo 'Building file: $<'

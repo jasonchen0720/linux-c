@@ -28,7 +28,7 @@ static void printer(const struct rb_node *n)
 		printf("\033[0mnil");
 	else {
 		struct rb_data *__pr = rb_entry(n, struct rb_data, node);
-		if (n->color == RB_RED) {
+		if (rb_is_red(n)) {
 			printf("\033[31m%d", __pr->data);
 		} else {
 			printf("\033[0m%d", __pr->data);
@@ -46,37 +46,38 @@ void rbt_test(int argc, char **argv)
 	tree->printer = printer;
 	tree->rb_count = 0;
 	tree->root = NULL;
-	
+	struct rb_node *n;
+	struct rb_data *p;
 	for (i = 0; i < atoi(argv[0]); i++) {
-		struct rb_data *p 	= malloc(sizeof(struct rb_data));
-		p->data = rand() % 1000;
+		p = malloc(sizeof(struct rb_data));
+		if (!p)
+			break;
+		p->data = rand() % 100;
 		printf("Insert : %d.\n", p->data);
-		if (!rb_insert(&p->node, tree))
+		if (&p->node != rb_insert(&p->node, tree)) {
+			printf("Duplicate : %d\n", p->data);
 			free(p);
+		}
 	}
 	int red = 0;
 	int black = 0;
-	struct rb_node *n;
 	for (n = rb_first(tree); n ; n = rb_next(n)) {
-		struct rb_data *p = rb_entry(n, struct rb_data, node);
-		if (n->color == RB_RED) {
-			red++;
-		} else {
-			black++;
-		}
+		rb_is_red(n) ? red++ : black++;
 	}
-	
+	rb_print(tree);
 	printf("rb_count : %lu, red: %d  black: %d.\n", tree->rb_count, red, black);
-	for (i = 0; i < 5; i++) {
-		int r = rand() % 1000;
-		struct rb_node *n = rb_search(&r, tree);
+	for (i = 0; i < 5;) {
+		int r = rand() % 100;
+		n = rb_search(&r, tree);
 		if (n) {
+			i++;
 			struct rb_data *p = rb_entry(n, struct rb_data, node);
-			printf("Remove : %d", p->data);
+			printf("Remove : %d\n", p->data);
 			rb_remove(n, tree);
 			free(p);
 		}
 	}
+	rb_print(tree);
 	printf("rb_count : %lu.\n", tree->rb_count);
 	
 }
@@ -100,14 +101,15 @@ int bst_test(int argc,char **argv)
 
 }
 
-int main(int argc,char **argv)
+int test_entry_for_tree(int argc,char **argv)
 {
 	if (argc < 2)
 		return -1;
-	if (!strcmp(argv[1], "rbt"))
-		rbt_test(argc - 2, argv + 2);
-	else if (!strcmp(argv[1], "bst"))
-		bst_test(argc - 2, argv + 2);
+	printf("argv[0]:%s", argv[0]);
+	if (!strcmp(argv[0], "rbt"))
+		rbt_test(argc - 1, argv + 1);
+	else if (!strcmp(argv[0], "bst"))
+		bst_test(argc - 1, argv + 1);
 
 
 	return 0;

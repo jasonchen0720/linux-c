@@ -116,10 +116,49 @@ struct bst_node *bst_insert (struct bst_table *tree, struct bst_node *n)
     	tree->bst_root = n;
   	return n;
 }
-/* 
- * Deletes from @tree and returns node matching item.
- * Returns a null pointer if no matching item found. 
- */
+struct bst_node *bst_remove(struct bst_table *tree, struct bst_node *n, int self)
+{
+  	struct bst_node *d, *p; /* Node to delete and its parent. */
+  	int cmp;                /* Comparison between |p->_data| and |item|. */
+  	int dir;                /* Side of |q| on which |p| is located. */
+  	d = (struct bst_node *)&tree->bst_root;
+  	for (cmp = -1; cmp != 0; cmp = tree->bst_compare(n, d)) {
+      	dir = cmp > 0;
+      	p = d;
+      	d = d->bst_link[dir];
+      	if (d == NULL)
+        	return NULL;
+    }
+	if (d == n || !self) {
+	  	if (d->bst_link[1] == NULL)
+	    	p->bst_link[dir] = d->bst_link[0];
+		else {
+	      	struct bst_node *r = d->bst_link[1];
+	      	if (r->bst_link[0] == NULL) {
+	          	r->bst_link[0] = d->bst_link[0];
+	          	p->bst_link[dir] = r;
+	        } else {
+	          	struct bst_node *s;
+	          	for (;;) {
+	              	s = r->bst_link[0];
+	              	if (s->bst_link[0] == NULL)
+	                	break;
+	              	r = s;
+	            }
+	          	r->bst_link[0] = s->bst_link[1];
+	          	s->bst_link[0] = d->bst_link[0];
+	          	s->bst_link[1] = d->bst_link[1];
+	          	p->bst_link[dir] = s;
+	        }
+	    }
+		tree->bst_count--;
+		tree->bst_generation++;
+	}
+	return d;
+}
+
+/* Deletes from |tree| and returns an item matching |item|.
+   Returns a null pointer if no matching item found. */
 struct bst_node *bst_delete(struct bst_table *tree, const void *item)
 {
   	struct bst_node *d, *p;

@@ -38,9 +38,10 @@ static void print_tree(struct rb_node *n,
 	if (n)
 		print_tree(n->left, printer, 1,  level + 1);
 }
-static void rb_print(struct rb_tree *tree)
+void rb_print(struct rb_tree *tree)
 {
 	printf("--------------------------------------------------------------------------\n");
+	printf("RB tree count:%lu\n", tree->rb_count);
 	print_tree(tree->root, tree->printer, 0, 0);
 	printf("--------------------------------------------------------------------------\n");
 }
@@ -226,7 +227,7 @@ void rb_insert_color(struct rb_node *node, struct rb_tree *tree)
 	/* Anyway, set the root black */
 	rb_set_black(tree->root);
 }
-int rb_insert(struct rb_node *node, struct rb_tree *tree)
+struct rb_node * rb_insert(struct rb_node *node, struct rb_tree *tree)
 {
 	struct rb_node **link;
 	struct rb_node *parent = NULL;            
@@ -235,7 +236,7 @@ int rb_insert(struct rb_node *node, struct rb_tree *tree)
 		//print_entry(*link, "link");
       	cmp = tree->comparator(node, *link);
       	if (cmp == 0)
-        	return 0;
+        	return *link;
 		parent = *link;
     }
 	node->color = RB_RED;
@@ -245,8 +246,8 @@ int rb_insert(struct rb_node *node, struct rb_tree *tree)
 	*link = node;
 	rb_insert_color(node, tree);
 	tree->rb_count++;
-	rb_print(tree);
-  	return 1;
+	//rb_print(tree);
+  	return node;
 }
 
 void rb_remove_color(struct rb_node *node, struct rb_node *parent, struct rb_tree *tree)
@@ -264,7 +265,7 @@ void rb_remove_color(struct rb_node *node, struct rb_node *parent, struct rb_tre
 	 *(*): black or red
 	 */
 	struct rb_node *silbing;
-	struct rb_node *nephew;
+	//struct rb_node *nephew;
 	while (rb_is_black(node) && node != tree->root) {
 		if (parent->left == node) {
 			silbing = parent->right;
@@ -278,7 +279,7 @@ void rb_remove_color(struct rb_node *node, struct rb_node *parent, struct rb_tre
 			 *              NL(b) NR(b)  (n)-> N(B)   NL(b)
 			 */
 			if (rb_is_red(silbing)) {
-				printf("node: %p, silbing->left: %p, silbing->right: %p.\n", node, silbing->left, silbing->right);
+				//printf("node: %p, silbing->left: %p, silbing->right: %p.\n", node, silbing->left, silbing->right);
 				rb_set_red(parent);
 				rb_set_black(silbing);
 				rb_rotate_left(parent, tree);
@@ -344,7 +345,7 @@ void rb_remove_color(struct rb_node *node, struct rb_node *parent, struct rb_tre
 			 *       NL(b) NR(b)                        NR(b) N(B)
 			 */
 			if (rb_is_red(silbing)) {
-				printf("node: %p, silbing->left: %p, silbing->right: %p.\n", node, silbing->left, silbing->right);
+				//printf("node: %p, silbing->left: %p, silbing->right: %p.\n", node, silbing->left, silbing->right);
 				rb_set_black(silbing);
 				rb_set_red(parent);
 				rb_rotate_right(parent, tree);
@@ -403,7 +404,7 @@ void rb_remove_color(struct rb_node *node, struct rb_node *parent, struct rb_tre
 	if (node)
 		rb_set_black(node);
 }
-int rb_remove(struct rb_node *node, struct rb_tree *tree)
+void rb_remove(struct rb_node *node, struct rb_tree *tree)
 {
 	struct rb_node *child;
 	struct rb_node *parent;
@@ -469,7 +470,7 @@ color_fix:
 	if (node->color == RB_BLACK)
 		rb_remove_color(child, parent, tree);
 	tree->rb_count--;
-	rb_print(tree);
+	//rb_print(tree);
 }
 struct rb_node *rb_search(void *item, struct rb_tree *tree)
 {

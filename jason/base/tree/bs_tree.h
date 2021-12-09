@@ -40,6 +40,7 @@ struct bst_table
 struct bst_table *bst_create(bst_comparator *comparator, bst_searcher *searcher, bst_printer *printer, unsigned int height);
 void   bst_destroy(struct bst_table *tree, bst_destroyer *destroyer, int cleanall);
 struct bst_node *bst_insert (struct bst_table *tree, struct bst_node *n);
+struct bst_node *bst_remove(struct bst_table *tree, struct bst_node *n, int self);
 struct bst_node *bst_delete(struct bst_table *tree, const void *item);
 struct bst_node *bst_search (const struct bst_table *tree, const void *item);
 

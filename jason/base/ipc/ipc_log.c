@@ -48,43 +48,53 @@ static void ipc_funlock(int fd)
 		}
 	}
 }
-static int ipc_log_time(char *time_info)
+static void ipc_log_copy(FILE *io, const char *file)
 {
-	struct tm *datetime;
+	char buf[32 * 1024];
+
+	FILE *fp = fopen(file, "w");
+	if (!fp) {
+		printf("Copy error.\n");
+		return;
+	}
+	size_t size;
+	fseek(io, 0, SEEK_SET);
+	while ((size = fread(buf, 1, sizeof(buf), io))) {
+		fwrite(buf, 1, size, fp);
+	}
+	fflush(fp);
+	fclose(fp);
+}
+static inline int ipc_log_time(char *time_info, size_t size)
+{
+	struct tm tm;
 	time_t now_time;
 	now_time = time(NULL);
-	datetime = localtime(&now_time);
-	return strftime(time_info, 80, "%b %d %H:%M:%S ", datetime);
+	if (localtime_r(&now_time, &tm))
+		return strftime(time_info, size, "%b %d %H:%M:%S ", &tm);
+	else
+		return snprintf(time_info, size, "%s ", "");
 }
-static int ipc_log_size(int fd)
-{
-    struct stat st_buf;
-	
-	return 0 == fstat(fd, &st_buf) ? st_buf.st_size : 0;
-}
-
 static void ipc_log_print(const char *format, va_list ap)
 {
 	int fd;
 	int size;
-	char buff[128];
-	FILE *fp;
-	if((fp = fopen(IPC_LOG_FILE, "a+")) == NULL)	
+	char time[32];
+	FILE *fp = fopen(IPC_LOG_FILE, "a+");
+	if(fp == NULL)
 		return;
 	fd = fileno(fp);
 	ipc_flock(fd);
-	size = ipc_log_size(fd);
-	if(size > IPC_LOG_MAX_SIZE)
-	{
-		snprintf(buff, sizeof(buff), "cp %s %s", IPC_LOG_FILE, IPC_LOG_FILE_BAK);
-		system(buff);
-		ftruncate(fd, 0); 
-		lseek(fd, 0, SEEK_SET);
-	}
-	size = ipc_log_time(buff);
-	fwrite(buff, size, 1, fp);
+	size = ipc_log_time(time, sizeof(time));
+	fwrite(time, size, 1, fp);
 	vfprintf(fp, format, ap);
 	fflush(fp);
+
+	if (ftell(fp) > IPC_LOG_MAX_SIZE) {
+		ipc_log_copy(fp, IPC_LOG_FILE_BAK);
+		ftruncate(fd, 0);
+	}
+	
 	ipc_funlock(fd);
 	fclose(fp);
 }

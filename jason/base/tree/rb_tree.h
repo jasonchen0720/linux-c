@@ -31,8 +31,9 @@ struct rb_tree
 #define rb_entry(ptr, type, member)   \
 ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
-int rb_insert(struct rb_node *node, struct rb_tree *tree);
-int rb_remove(struct rb_node *node, struct rb_tree *tree);
+void rb_print(struct rb_tree *tree);
+struct rb_node * rb_insert(struct rb_node *node, struct rb_tree *tree);
+void rb_remove(struct rb_node *node, struct rb_tree *tree);
 struct rb_node *rb_search(void *item, struct rb_tree *tree);
 struct rb_node *rb_first(const struct rb_tree *tree);
 struct rb_node *rb_last(const struct rb_tree *tree);

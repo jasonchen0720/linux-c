@@ -4,7 +4,7 @@ include $(JASON_WORK_DIR)/cflags.mk
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libipc.a
+STATIC_LIBS := libthread-pool.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
@@ -16,13 +16,11 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
+-I$(JASON_WORK_DIR)/base/include
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./ipc_client.c \
-./ipc_server.c \
-./ipc_base.c \
-./ipc_log.c
+./thread_pool.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'

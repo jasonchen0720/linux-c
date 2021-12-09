@@ -1,33 +1,34 @@
+include $(JASON_WORK_DIR)/config.mk
+include $(JASON_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES := test
+EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS :=
+STATIC_LIBS := libtm.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
 
 SRCS :=
 
-CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result#-fstack-protector-strong -g
+CFLAGS +=
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
+-I$(JASON_WORK_DIR)/base/include \
 
-IFLAGS += -I$(JASON_WORK_DIR)/base/tree/
-IFLAGS += -I$(JASON_WORK_DIR)/lib/include/
+ifeq ($(CONFIG_TREE),y)
+IFLAGS += -I$(JASON_WORK_DIR)/base/tree
+endif
+ifeq ($(CONFIG_THREAD_POOL),y)
+IFLAGS += -I$(JASON_WORK_DIR)/base/thread-pool
+endif
 
-#ld
-LDFLAGS :=
-
-LDFLAGS += -L$(JASON_WORK_DIR)/base/tree/
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/
 # All of the sources participating in the build are defined here
 SRCS += \
-./ccl.c \
-./test_tree.c
+./timer.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -38,8 +39,11 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=$(JASON_WORK_DIR)/base/tree/libtree.a
-LIBS := -ljason -lpthread
+USER_OBJS := 
+
+
+
+LIBS :=
 
 SHARE_LIBS :=
 

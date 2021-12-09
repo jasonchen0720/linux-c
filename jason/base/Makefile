@@ -1,4 +1,16 @@
-all clean:
-	$(MAKE) -C ./ipc  $@
-	$(MAKE) -C ./tree  $@
+include $(JASON_WORK_DIR)/config.mk
 
+all clean:
+	$(MAKE) -C ./common  $@
+ifeq ($(CONFIG_IPC),y)
+	$(MAKE) -C ./ipc  $@
+endif
+ifeq ($(CONFIG_TREE),y)
+	$(MAKE) -C ./tree  $@
+endif
+ifeq ($(CONFIG_THREAD_POOL),y)
+	$(MAKE) -C ./thread-pool  $@
+endif
+ifeq ($(CONFIG_TMR),y)
+	$(MAKE) -C ./timer  $@
+endif

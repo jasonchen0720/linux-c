@@ -1,0 +1,1 @@
+CFLAGS += -fPIC -Os -Wall -Werror -c -MMD -MP -Wno-unused-result -g #-fstack-protector-strong

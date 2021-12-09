@@ -1,3 +1,4 @@
+include $(JASON_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
@@ -10,7 +11,7 @@ SHARED_LIBS :=
 
 SRCS :=
 
-CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result#-fstack-protector-strong
+CFLAGS += 
 
 # Every subdirectory with source files must be described here
 IFLAGS := \

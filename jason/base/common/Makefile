@@ -1,32 +1,25 @@
+include $(JASON_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES := test
+EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS :=
+STATIC_LIBS := libbase.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
 
 SRCS :=
 
-CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result#-fstack-protector-strong -g
+CFLAGS +=
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
 
-IFLAGS += -I$(JASON_WORK_DIR)/base/ipc/
-IFLAGS += -I$(JASON_WORK_DIR)/lib/include/
-
-#ld
-LDFLAGS :=
-
-LDFLAGS += -L$(JASON_WORK_DIR)/base/ipc/
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/
 # All of the sources participating in the build are defined here
 SRCS += \
-./test_ipc.c
+./logger.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -37,8 +30,11 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=$(JASON_WORK_DIR)/base/ipc/libipc.a
-LIBS := -ljason -lpthread
+USER_OBJS :=
+
+
+
+LIBS :=
 
 SHARE_LIBS :=
 
