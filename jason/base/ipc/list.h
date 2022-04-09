@@ -1,18 +1,31 @@
 #ifndef _LIST_H
 #define _LIST_H
-#define LIST_POISON1  ((void *) 0x00100100)
-#define LIST_POISON2  ((void *) 0x00200200)
+#define LIST_POISON1  (NULL)
+#define LIST_POISON2  (NULL)
 
-struct list_head 
+struct list_head
 {
 	struct list_head *next;
 	struct list_head *prev;
 };
 
+/**
+ * container_of - cast a member of a structure out to the containing structure
+ * @ptr:	the pointer to the member.
+ * @type:	the type of the container struct this is embedded in.
+ * @member:	the name of the member within the struct.
+ *
+ */
+#define offsetof(type, member) ((char *) &((type *)0)->member)
+#define container_of(ptr, type, member) ({			\
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+	(type *)( (char *)__mptr - offsetof(type,member) );})
 
 
 #define list_entry(ptr, type, member)   \
 ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+
+#define list_head_initializer(name) { &(name), &(name) }
 
 #define init_list_head(ptr)   \
 do {(ptr)->next = (ptr); (ptr)->prev = (ptr);} while(0)
@@ -68,23 +81,23 @@ static inline void INIT_LIST_HEAD(struct list_head *list)
     list->next = list->prev = list;
 }
 
-static inline void __list_add(struct list_head *new,struct list_head *prev, struct list_head *next)
+static inline void __list_add(struct list_head *node,struct list_head *prev, struct list_head *next)
 {
-	next->prev = new;
-	new->next = next;
-	new->prev = prev;
-	prev->next = new;
+	next->prev = node;
+	node->next = next;
+	node->prev = prev;
+	prev->next = node;
 }
 
-static inline void list_add(struct list_head *new, struct list_head *head)
+static inline void list_add(struct list_head *node, struct list_head *head)
 {
-	__list_add(new, head, head->next);
+	__list_add(node, head, head->next);
 }
 
 
-static inline void list_add_tail(struct list_head *new, struct list_head *head)
+static inline void list_add_tail(struct list_head *node, struct list_head *head)
 {
-	__list_add(new, head->prev, head);
+	__list_add(node, head->prev, head);
 }
 
 static inline void __list_del(struct list_head * prev, struct list_head * next)

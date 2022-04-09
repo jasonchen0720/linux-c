@@ -98,7 +98,7 @@ client_handle *client_subscriber_register(int service, unsigned long topic_set, 
 		default:
 			return NULL;
 	}
-	return (client_handle *)ipc_subscriber_register(broker, topic_set, cb, NULL);
+	return (client_handle *)ipc_subscriber_register(broker, topic_set, NULL, 0, cb, NULL);
 }
 
 void client_subscriber_unregister(client_handle *handle)

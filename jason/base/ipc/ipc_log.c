@@ -1,5 +1,9 @@
 /*
  * Copyright (c) 2017, <-Jason Chen->
+ * Issue fix: - 20211126
+ *            - (1). Mult-thread-safe: localtime() -> localtime_r() in ipc_log_time().
+ *            - (2). Risk of null pointer: directly use the returning of localtime() in ipc_log_time().
+ *
  * Author: Jie Chen <jasonchen@163.com>
  * Note  : This program is used for libipc simple log print implementation
  * Date  : Created at 2017/11/01
@@ -94,7 +98,7 @@ static void ipc_log_print(const char *format, va_list ap)
 		ipc_log_copy(fp, IPC_LOG_FILE_BAK);
 		ftruncate(fd, 0);
 	}
-	
+
 	ipc_funlock(fd);
 	fclose(fp);
 }

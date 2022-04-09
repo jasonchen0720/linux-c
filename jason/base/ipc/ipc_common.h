@@ -13,6 +13,7 @@ enum ERR_CODE
 	IPC_ESEND,
 	IPC_ECONN,
 	IPC_EMSG,
+	IPC_EVAL,
 	IPC_EMAX,
 };
 struct ipc_msg
@@ -36,14 +37,31 @@ struct ipc_notify
 };
 enum {
    /*
+ 	* Bits:0 - 7 used by Client.
+ 	*/
+ 	IPC_BIT_CLIENT	= 0,
+   /*
  	* This bit indicates the message has a response.
  	*/
-	IPC_BIT_REPLY 	= 0,
+	IPC_BIT_REPLY 	= IPC_BIT_CLIENT,
 
-	IPC_BIT_MAX 	= 16
+
+   /*
+ 	* Following bits 8 - 15 used by Server.
+ 	*/
+	IPC_BIT_SERVER		= 8,
+   /*
+ 	* Bit 8-9 indicate the message class.
+ 	*/
+	IPC_BIT_CONNECTOR 	= IPC_BIT_SERVER,
+	IPC_BIT_SUBSCRIBER	= 9,
+	
+	IPC_BIT_ASYNC		= 15,
+	IPC_BIT_MAX 		= 16
 };
 #define IPC_FLAG_EXPECT_REPLY	(1u << IPC_BIT_REPLY)
-#define ipc_subscribed(sr,t)		((sr)->peer->mask & (t))
+#define IPC_FLAG_REPLY			(1u << IPC_BIT_REPLY)
+#define IPC_FLAG_CLIENT_MASK	((1u << IPC_BIT_SERVER) - 1)
 /*
  * ipc_msg_space_check() - Used to check if the buffer space %max is enough for the ipc message. 
  */
