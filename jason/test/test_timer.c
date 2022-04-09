@@ -3,13 +3,14 @@
 #include "timer.h"
 #include "test.h"
 
-#define TMRS_MAX	20
+#define TMRS_MAX	8
 static struct timer_struct timers[TMRS_MAX] = {
 	TIMER_INITIALIZER,
 };
 #define FUNC(secs) \
 static void func##secs(void *arg) {\
 	LOGI("Timer index:%lu expired", (unsigned long)arg);\
+	usleep(500 * 1000);\
 }
 FUNC(01)
 FUNC(02)
@@ -52,9 +53,24 @@ static void (*funcs[])(void *) = {
 	func26, func27, func28, func29, func30, 
 	func31};
 
+
+static void test_func(void *arg)
+{
+	printf("Test Timer func enter.\n");
+	timer_del(arg);
+	printf("Test Timer func leave.\n");
+}
+static struct timer_struct test_timer = TIMER_INITIALIZER;
 int test_entry_for_timer(int argc, char **argv)
 {
-	timer_setup();
+	struct timer_option opt = {0, 2, 5, 0};
+	timer_setup(&opt);
+
+
+	timer_add(&test_timer, TMR_OPT_CYCLE, 5000, test_func, &test_timer);
+
+	timer_add(&test_timer, TMR_OPT_CYCLE, 5000, test_func, &test_timer);
+	
 	usleep(1000 * 1000);
 	
 	unsigned long i;
@@ -65,7 +81,7 @@ int test_entry_for_timer(int argc, char **argv)
 		timer_add(timers + i, TMR_OPT_THREAD | TMR_OPT_CYCLE, (n + 1) * 1000, funcs[n], (void *)i);
 		usleep(1000 * 1000);
 	}
-	for (i = 1; ;i++) {
+	for (i = 1; i < atoi(argv[0]); i++) {
 		sleep(1);
 		#if 0
 		if ((i % 4) == 0)
