@@ -70,12 +70,13 @@ void thread_pool_wait(struct thread_pool *pool)
 {
 	pthread_mutex_lock(&pool->mutex);
 
+	pthread_cleanup_push(pthread_mutex_unlock, &pool->mutex);
+	
 	while (!list_empty(&pool->job_head) || !list_empty(&pool->active_thread_head)) {
 		pool->flags |= BIT(THREAD_POOL_WAIT);
 		pthread_cond_wait(&pool->wait_cond, &pool->mutex);
 	}
-
-	pthread_mutex_unlock(&pool->mutex);
+	pthread_cleanup_pop(1);
 }
 static void thread_pool_wakeup(struct thread_pool *pool) {
 	
@@ -206,7 +207,7 @@ static void *thread_task(void *arg)
 		while (list_empty(&pool->job_head)) {
 			if (pool->flags & BIT(THREAD_POOL_DESTROY))
 				break;
-			LOGI("idlethreads:%d, nthreads:%d, minthreads:%d.", pool->idlethreads, pool->nthreads, pool->nthreads);
+			LOGI("idlethreads:%d, nthreads:%d, minthreads:%d.", pool->idlethreads, pool->nthreads, pool->minthreads);
 			if (pool->nthreads <= pool->minthreads) {
 				pthread_cond_wait(&pool->work_cond, &pool->mutex);
 			} else {
