@@ -31,8 +31,9 @@ static int ipcClientManager( struct ipc_server *cli, int cmd, void *data, void *
 	case IPC_CLIENT_RELEASE:
 		return 0;
 	case IPC_CLIENT_REGISTER:
-		if (ipc_subscribed(cli, 1))
-			ipc_server_notify(cli, 1, 555, "welcome1", sizeof("welcome1"));
+		if (cli->clazz == IPC_CLASS_SUBSCRIBER)
+			if (ipc_subscribed(cli, 1))
+				ipc_server_notify(cli, 1, 555, "welcome1", sizeof("welcome1"));
 		return 0;
 	case IPC_CLIENT_SYNC:
 		if (ipc_subscribed(cli, 1))
@@ -109,8 +110,20 @@ int test_entry_for_ipc(int argc, char **argv)
 	char buf[1024] = {0};
 	unsigned long mask;
 	if (!strcmp(argv[0], "server")) {
+		pid_t pid = fork();
 
-		//signal(SIGCHLD, SIG_IGN);
+		if (pid == 0) {
+			if (ipc_server_init(IPC_SERVER_BROKER, ipcServerHandler) < 0)
+			{
+				printf("server init error\n");
+				exit(-1);
+			}
+			if (ipc_server_run() < 0) {
+				printf("run error\n");
+				exit(-1);
+			}
+		}
+		signal(SIGCHLD, SIG_IGN);
 		pthread_t task_pid;
 		struct ipc_timing test_timing = ipc_timing_initializer(test_timing,1,6,0,NULL,timing_handler);
 		if (ipc_server_init(IPC_SERVER_TEST, ipcServerHandler) < 0)
@@ -123,18 +136,17 @@ int test_entry_for_ipc(int argc, char **argv)
 		pthread_create(&task_pid, NULL, monitor_task, NULL);
 		int fd = sig_proxy_init();
 		ipc_server_proxy(fd, sig_proxy_handler, NULL);
-		ipc_timing_register(&test_timing);
-		
+		//ipc_timing_register(&test_timing);
+
 		printf("Run ---- \n");
 		if (ipc_server_run() < 0) {
 			printf("run error\n");
 			exit(-1);
 		}
-
-		ipc_server_exit();
 	} else if (!strcmp(argv[0], "client")) {
 		mask = strtoul(argv[1], NULL, 10);
-		struct ipc_subscriber *subscriber = ipc_subscriber_register(IPC_SERVER_TEST, mask, NULL, 0, indication_msg_callback, NULL);
+		const char *s = !strcmp(argv[2], "broker") ? IPC_SERVER_BROKER : IPC_SERVER_TEST;
+		struct ipc_subscriber *subscriber = ipc_subscriber_register(s, mask, NULL, 0, indication_msg_callback, NULL);
 
 		if (subscriber == NULL) {
 			printf("init error\n");
@@ -147,10 +159,10 @@ int test_entry_for_ipc(int argc, char **argv)
 
 	} else if (!strcmp(argv[0], "publisher")) {
 		mask = strtoul(argv[1], NULL, 10);
-
+		const char *s = !strcmp(argv[2], "broker") ? IPC_SERVER_BROKER : IPC_SERVER_TEST;
 		while (1) {
 			struct ipc_client *client = NULL;
-			client = ipc_client_create(IPC_SERVER_TEST);
+			client = ipc_client_create(s);
 			if (client) {
 				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq1, sizeof(test_seq1), 3);
 				//ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq2, sizeof(test_seq2), 3);

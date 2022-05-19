@@ -22,8 +22,8 @@
 #define IPC_ERR(format,...)
 #endif
 
-#define IPC_LOG_FILE			"/tmp/ipclog"
-#define IPC_LOG_FILE_BAK		"/tmp/ipclog.0"
+#define IPC_LOG_FILE			"/var/volatile/log/ipclog"
+#define IPC_LOG_FILE_BAK		"/var/volatile/log/ipclog.0"
 #define IPC_LOG_MAX_SIZE 		512*1024
 
 void IPC_LOG(const char *format, ...);

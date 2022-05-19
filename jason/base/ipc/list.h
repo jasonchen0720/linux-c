@@ -76,6 +76,33 @@ do {(ptr)->prev->next = (ptr)->next; (ptr)->next->prev = (ptr)->prev;} while(0)
                      pos != (head); \
                      pos = n, n = pos->prev)
 
+/**
+ * list_for_each_entry_reverse - iterate backwards over list of given type.
+ * @pos:	the type * to use as a loop cursor.
+ * @head:	the head for your list.
+ * @member: the name of the list_struct within the struct.
+ */
+#define list_for_each_entry_reverse(pos, head, member)			\
+								for (pos = list_entry((head)->prev, typeof(*pos), member);	\
+									 &pos->member != (head);	\
+									 pos = list_entry(pos->member.prev, typeof(*pos), member))
+				
+/**
+ * list_for_each_entry_safe_reverse - iterate backwards over list safe against removal
+ * @pos:	the type * to use as a loop cursor.
+ * @n:		another type * to use as temporary storage
+ * @head:	the head for your list.
+ * @member: the name of the list_struct within the struct.
+ *
+ * Iterate backwards over list of given type, safe against removal
+ * of list entry.
+ */
+#define list_for_each_entry_safe_reverse(pos, n, head, member)		\
+								for (pos = list_entry((head)->prev, typeof(*pos), member),	\
+									n = list_entry(pos->member.prev, typeof(*pos), member); \
+									 &pos->member != (head);					\
+									 pos = n, n = list_entry(n->member.prev, typeof(*n), member))
+
 static inline void INIT_LIST_HEAD(struct list_head *list)
 {
     list->next = list->prev = list;

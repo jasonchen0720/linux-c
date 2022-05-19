@@ -1,21 +1,22 @@
 #ifndef __IPC_SERVER_H__
 
 #define __IPC_SERVER_H__
-#include <time.h>
+#include <sys/time.h>
 #include "list.h"
 #include "ipc_common.h"
 
 /* 
  * User needs to define private data type ID if they want to bind different data type to sevr.
- * User's private data type ID need to defined different from values in enum IPC_PRIV_TYPE.
+ * User's private cookie type values need to be defined less than IPC_COOKIE_USER(0x8000).
  */
 enum IPC_COOKIE_TYPE 
 {
 	IPC_COOKIE_USER = 0x8000,
+	IPC_COOKIE_NONE,
 	IPC_COOKIE_ASYNC,
 };
 /* 
- * Template of cookie, must defined with field |type| as the first member
+ * Template of cookie, must defined with field |type| of int as the first member
  */
 struct ipc_cookie
 {
@@ -101,6 +102,7 @@ enum IPC_MANAGER_CMD
 	 IPC_CLIENT_RELEASE = 1,	/* For subscriber / connector, do your own release work */
 	 IPC_CLIENT_REGISTER,		/* For subscriber / connector, registering stage, do your own register work*/
 	 IPC_CLIENT_SYNC,		    /* For subscriber, indicates client's callback is ready */
+	 IPC_CLIENT_UNREGISTER,		/* For subscriber, unregister normally */
 	 IPC_CLIENT_SHUTDOWN,		/* For subscriber, shutdown abnormally */
 };
 /* 
@@ -152,9 +154,9 @@ enum IPC_CLASS
 /*
  * Return the private data type, values may be IPC_COOKIE_ASYNC or different values defined by user. 
  */
-#define ipc_cookie_type(cookie) ({ struct ipc_cookie *__c = (struct ipc_cookie *)cookie; __c->type; })
+#define ipc_cookie_type(cookie) ({ struct ipc_cookie *__c = (struct ipc_cookie *)cookie; __c ? __c->type : IPC_COOKIE_NONE; })
 int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie);
-int ipc_subscribed(const struct ipc_server *sevr, unsigned int mask);
+int ipc_subscribed(const struct ipc_server *sevr, unsigned long mask);
 int ipc_async_execute(void *cookie, struct ipc_msg *msg, 
 				void (*func)(struct ipc_msg *, void *), 
 				void (*release)(struct ipc_msg *, void *), void *arg);

@@ -488,13 +488,15 @@ static int ipc_subscriber_connect(struct ipc_subscriber *subscriber)
 {
 	int dynamic = 0;
 	char buffer[256] = {0};
+	unsigned int sbuf = sizeof(buffer);
 	unsigned int size = sizeof(struct ipc_reg) + subscriber->data_len;
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;
-	if (ipc_msg_space_check(sizeof(buffer), size) == 0) {
+	if (ipc_msg_space_check(sbuf, size) == 0) {
 		ipc_msg = ipc_alloc_msg(size);
 		if (!ipc_msg)
 			return -1;
 		else dynamic = 1;
+		sbuf = size + sizeof(struct ipc_msg);
 	}
 	struct ipc_reg *reg = (struct ipc_reg *)ipc_msg->data;
 
@@ -511,7 +513,7 @@ static int ipc_subscriber_connect(struct ipc_subscriber *subscriber)
 		memcpy(reg->data, subscriber->data, subscriber->data_len);
 	ipc_msg->data_len = size;
 
-	if (IPC_REQUEST_SUCCESS != ipc_request(&subscriber->client, ipc_msg, sizeof(buffer),1))
+	if (IPC_REQUEST_SUCCESS != ipc_request(&subscriber->client, ipc_msg, sbuf, 1))
 		goto __error;
 	
 	if (ipc_msg->msg_id != IPC_SDK_MSG_SUCCESS)

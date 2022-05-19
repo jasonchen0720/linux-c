@@ -39,7 +39,6 @@
 #include <sys/un.h>
 #include <sys/select.h>
 #include <sys/stat.h>
-#include <sys/time.h>
 #include "ipc_server.h"
 #include "ipc_log.h"
 #include "ipc_base.h"
@@ -76,8 +75,7 @@ struct ipc_pool
  */
 struct ipc_async
 {
-	/* Keep type first */
-	int		type;
+	int		type;	/* Cookie type: Keep at the first field */
 	void 	*arg;
 	void (*func)(struct ipc_msg *, void *);
 	void (*release)(struct ipc_msg *, void *);
@@ -738,6 +736,9 @@ static int ipc_broker_unreg(struct ipc_core *core, struct ipc_server *sevr, stru
 		return -1;
 	IPC_LOGI("client %d:%s exit, sk:%d, mask:%04lx",
 								sevr->identity,  peer_name(sevr), sevr->sock, peer->mask);
+
+	ipc_server_manager(core, sevr, IPC_CLIENT_UNREGISTER, NULL);
+	
 	send_msg(sevr->sock, msg);
 	ipc_release(core, sevr);
 	return 0;
@@ -934,6 +935,7 @@ static int ipc_broker_register(struct ipc_core *core, int sock, struct ipc_msg *
 	 * This is the only hook which expose the IPC handle, user can set client cookies through this.
 	 */
 	if (ipc_server_manager(core, &peer->sevr, IPC_CLIENT_REGISTER, reg->data) < 0) {
+		msg->data_len = 0;
 		send_msg(sock, msg);
 		goto __error;
 	}
@@ -954,6 +956,7 @@ __error:
 	ipc_release(core, &peer->sevr);
 	return -1;
 __fatal:
+	msg->data_len = 0;
 	send_msg(sock, msg);
 	close(sock);
 	return -1;
@@ -1530,7 +1533,7 @@ int ipc_server_setopt(int opt, void *arg)
 	}
 }
 /**
- * ipc_server_bind - used to bind private data to the registering client.
+ * ipc_server_bind - used to bind private cookie to the registering client.
  * @sevr: ipc handle for registering client.
  * @type: Indicate private data type, defined in enum IPC_COOKIE_TYPE.
  *		  IPC_COOKIE_USER:
@@ -1538,6 +1541,7 @@ int ipc_server_setopt(int opt, void *arg)
  *	 	  IPC_COOKIE_ASYNC:
  *		   - @cookie must be set as an unsigned integer value to indicate max IPC msg buffer size used in IPC async callback.
  * @cookie: Client cookie to be used in callbacks.
+ *			Private cookie type values need to be defined less than IPC_COOKIE_USER(0x8000).
  *          
  */
 int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie)
@@ -1557,8 +1561,14 @@ int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie)
 			return -1;
 
 		cookie = async;
-	} else assert(type == IPC_COOKIE_USER);
-	
+	} else {
+		assert(type == IPC_COOKIE_USER);
+
+		if (ipc_cookie_type(cookie) >= IPC_COOKIE_USER) {
+			IPC_LOGE("Invalid cookie type.");
+			return -1;
+		}
+	}
 	struct ipc_server *t = (struct ipc_server *)sevr; 
 	t->cookie = cookie;
 	IPC_LOGI("Bind priv type:%x @%p.", type, cookie);
@@ -1570,7 +1580,7 @@ int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie)
  * @sevr: ipc handle for registered client.
  * return: zero or none zero.
  */
-int ipc_subscribed(const struct ipc_server *sevr, unsigned int mask)
+int ipc_subscribed(const struct ipc_server *sevr, unsigned long mask)
 {
 	assert(sevr->clazz == IPC_CLASS_SUBSCRIBER);
 	struct ipc_peer *peer = container_of(sevr, struct ipc_peer, sevr);
