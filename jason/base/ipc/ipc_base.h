@@ -4,7 +4,7 @@
  * Copyright (c) 2017, <-Jason Chen->
  * Version 1.1.0. modified at 2020/05/20
  * Author: Jie Chen <jasonchen@163.com>
- * Note  : This head file only used for libipc internal definitions, users could not include this file
+ * Brief : This header file only used for IPC internal definitions, users needn't include this header file.
  * Date  : Created at 2020/05/20
  */
 #include <stdlib.h>

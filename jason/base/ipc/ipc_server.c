@@ -5,10 +5,10 @@
  *					1. Add struct ipc_async and related APIs named ipc_async_xxx().
  *                     With IPC async, server has the ability to response to client asynchronously.
  * 					2. Add data option(registering information) for subscriber registering - ipc_broker_register().
- *					3. Add option for ipc_client_manager() - IPC_CLIENT_SHUTDOWN.
+ *					3. Add option for ipc_client_manager() - IPC_CLIENT_UNREGISTER, IPC_CLIENT_SHUTDOWN.
  *					4. Modify ipc_server_manager(), supporting to manage client class: IPC_CLASS_CONNECTOR.
  *			      - Optimizations: 
- *				    1. Add @arg and @priv passed as the sole argument of handler().
+ *				    1. Add @arg and @cookie passed as the sole argument of handler().
  *				    2. Simplify ipc mutex option, Remove struct ipc_mutex, using __ipc_mutex internal instead.
  *				    3. Optimize struct ipc_peer, needing less Memory.
  *				    4. Optimize struct ipc_proxy, needing less Memory.
@@ -25,7 +25,7 @@
  *
  * Author: Jie Chen <jasonchen0720@163.com>
  *
- * Brief : This program is used for libipc server core implementation.
+ * Brief : This program is the implementation of IPC server core.
  * Date  : Created at 2017/11/01
  */
 #include <unistd.h>
@@ -527,7 +527,7 @@ static inline int node_hash_bucket_init(struct ipc_core *core)
 	IPC_LOGI("node hash bucket initialized.");
 	return 0;
 }
-int timing_time(struct timeval *tv)
+static int timing_time(struct timeval *tv)
 {	
 	struct timespec ts;
 	if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
@@ -536,7 +536,7 @@ int timing_time(struct timeval *tv)
 	tv->tv_usec = ts.tv_nsec / 1000;
 	return 0;
 }
-int timing_refresh(struct ipc_timing *timing, const struct timeval *tv)
+static int timing_refresh(struct ipc_timing *timing, const struct timeval *tv)
 {	
 	struct timespec ts;
 	if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
@@ -1094,6 +1094,12 @@ static int ipc_master_init(struct ipc_core *core)
 		close(sock);
 		return -1;
 	}
+
+	if (fcntl(sock, F_SETFD, FD_CLOEXEC) == -1) {
+		close(sock);
+		return -1;
+	}
+	
 	IPC_LOGI("master sock:%d", master->sock);
 	return 0;
 }

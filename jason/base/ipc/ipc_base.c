@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2020, We-wins
+ * Copyright (c) 2020, <-Jason Chen->
  * Version 1.1.0. modified at 2020/05/20
- * Author: Jie Chen <chenjie@we-wins.com>
- * Note  : This program is used for libipc internal definitions
+ * Author: Jie Chen <jasonchen0720@163.com>
+ * Brief : IPC internal definitions
  * Date  : Created at 2020/05/20
  */
 

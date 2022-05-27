@@ -18,7 +18,7 @@
  *				  - What is new in 1.1.0? Works more efficiently and fix some extreme internal bugs.
  *			1.0.x - 20171101
  * Author: Jie Chen <jasonchen0720@163.com>
- * Brief : This program is used for libipc client interface implementation
+ * Brief : This program is the implementation of IPC client interfaces.
  * Date  : Created at 2017/11/01
  */
 #include <stdlib.h>

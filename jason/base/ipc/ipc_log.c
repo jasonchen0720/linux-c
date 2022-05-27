@@ -5,7 +5,7 @@
  *            - (2). Risk of null pointer: directly use the returning of localtime() in ipc_log_time().
  *
  * Author: Jie Chen <jasonchen@163.com>
- * Note  : This program is used for libipc simple log print implementation
+ * Brief : This program is the implementation of IPC simple log print.
  * Date  : Created at 2017/11/01
  */
 #include <stdio.h>
