@@ -42,6 +42,7 @@
 #include "ipc_server.h"
 #include "ipc_log.h"
 #include "ipc_base.h"
+#define IPC_PERF
 struct ipc_task
 {
 	pthread_t tid;
@@ -108,6 +109,10 @@ struct ipc_proxy
 };
 struct ipc_core {
 	struct list_head timing;
+#ifdef IPC_PERF
+	int				nfds;
+	fd_set 			rfds; /* In case of performance bottlenecks, using epoll instead. */
+#endif	
 	struct list_head head;
 	struct list_head *node_hb;
 	/**
@@ -460,6 +465,42 @@ static inline int bit_count(unsigned long mask)
 	}
 	return i;
 }
+#ifdef IPC_PERF
+static void fds_add(int sock, struct ipc_core *core)
+{
+	FD_SET(sock, &core->rfds);
+	if (core->nfds < sock)
+		core->nfds = sock;
+
+	IPC_LOGI("add socket:%d current nfds:%d.", sock,  core->nfds);
+	
+	/* Print for debug */
+	struct ipc_server *s;
+	list_for_each_entry(s, &core->head, list) {
+		IPC_LOGI("socket:%d ISSET:%d.", s->sock, !!FD_ISSET(s->sock, &core->rfds));
+	}
+}
+static void fds_del(int sock, struct ipc_core *core)
+{
+	FD_CLR(sock, &core->rfds);
+	IPC_LOGI("del socket:%d ISSET:%d.", sock, !!FD_ISSET(sock, &core->rfds));
+	if (core->nfds == sock) {
+		core->nfds = 0;
+		struct ipc_server *s;
+		list_for_each_entry(s, &core->head, list) {
+			if (s->sock > core->nfds) 
+				core->nfds = s->sock;
+		}
+		IPC_LOGI("recalc nfds:%d.", core->nfds);
+	}
+	
+	/* Print for debug */
+	struct ipc_server *s;
+	list_for_each_entry(s, &core->head, list) {
+		IPC_LOGI("socket:%d ISSET:%d.", s->sock, !!FD_ISSET(s->sock, &core->rfds));
+	}
+}
+#endif
 static inline void sevr_init(struct ipc_core *core, struct ipc_server *sevr,
 							int clazz,
 							int identity,
@@ -472,6 +513,9 @@ static inline void sevr_init(struct ipc_core *core, struct ipc_server *sevr,
 	sevr->handler	= handler;
 	sevr->cookie 	= NULL;
 	list_add_tail(&sevr->list, &core->head);
+#ifdef IPC_PERF
+	fds_add(sock, core);
+#endif
 }
 static const char * peer_name(const struct ipc_server *sevr)
 {
@@ -671,6 +715,9 @@ static void ipc_release(struct ipc_core *core, struct ipc_server *sevr)
 		break;
 	}
 	list_delete(&sevr->list);
+#ifdef IPC_PERF
+	fds_del(sevr->sock, core);
+#endif	
 	close(sevr->sock);
 	free(p);
 }
@@ -1169,7 +1216,7 @@ static int ipc_loop(struct ipc_core *core)
 	fd_set readfds;
 	struct timeval tv, now, *timeout;
 	struct ipc_timing *timing;
-	struct ipc_server *ipc,*tmp;
+	struct ipc_server *ipc, *tmp;
 	while ((core->flags & IPC_CORE_F_RUN)
 		&& !list_empty(&core->head)) {
 		if (!list_empty(&core->timing)) {
@@ -1181,6 +1228,10 @@ static int ipc_loop(struct ipc_core *core)
 			else
 				tv.tv_sec = tv.tv_usec = 0;
 		} else timeout = NULL;
+#ifdef IPC_PERF
+		nfds	= core->nfds;
+		readfds = core->rfds;
+#else
 		FD_ZERO(&readfds);
 		nfds = 0;
 		list_for_each_entry(ipc, &core->head, list) {
@@ -1188,8 +1239,9 @@ static int ipc_loop(struct ipc_core *core)
 			FD_SET(ipc->sock, &readfds);
 			if (ipc->sock > nfds) nfds = ipc->sock;
 		}
+#endif
 	 __select:
-		res = select(nfds + 1, &readfds, NULL, NULL, timeout);
+		res = select(nfds + 1, &readfds, NULL, NULL, timeout); /* In case of performance bottlenecks, using epoll instead. */
 		if (res < 0) {
 			/* On Linux, the function select modifies timeout to reflect the amount of time not slept */
 			if (errno == EINTR)
@@ -1211,9 +1263,16 @@ static int ipc_loop(struct ipc_core *core)
 			}
 		}	
 		if (res > 0) {
+		#ifdef IPC_PERF
+			int n = 0;
+		#endif
 			list_for_each_entry_safe(ipc, tmp, &core->head, list) {
 				if (FD_ISSET(ipc->sock, &readfds)) {
 					ipc->handler(core, ipc);
+				#ifdef IPC_PERF
+					if (++n == res)
+						break;
+				#endif
 				}
 			}
 		} 
@@ -1259,7 +1318,10 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 	core->pool	  = NULL;
 	core->path 	  = (const char *)path;
 	core->server  = (const char *)serv;
-	
+#ifdef IPC_PERF
+	core->nfds	  = 0;
+	FD_ZERO(&core->rfds);
+#endif
 	if (ipc_master_init(core) < 0) {
 		core->path 	  = NULL;
 		core->path 	  = NULL;

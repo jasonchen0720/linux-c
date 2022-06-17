@@ -133,6 +133,14 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
 int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int msg_id, void *data, int size);
 int ipc_server_setopt(int opt, void *arg);
 int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg);
+/*
+ * ipc_timing_idle() - Checking if @timing is running.
+ *@timing: Must have been initialized.
+ */
+static inline int ipc_timing_idle(struct ipc_timing *timing)
+{
+	return timing->list.next == &timing->list;
+}
 int ipc_timing_register(struct ipc_timing *timing);
 int ipc_timing_unregister(struct ipc_timing *timing);
 int ipc_timing_refresh(struct ipc_timing *timing, const struct timeval *tv);
