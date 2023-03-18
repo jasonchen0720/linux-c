@@ -70,6 +70,7 @@ enum {
  * ipc_notify_space_check() - Used to check if the buffer space %max is enough for the notify message. 
  */
 #define ipc_notify_space_check(max, size)	ipc_msg_space_check(max, sizeof(struct ipc_notify) + size)
+struct ipc_msg * ipc_clone_msg(const struct ipc_msg *msg, unsigned int size);
 struct ipc_msg * ipc_alloc_msg(unsigned int size);
 void ipc_free_msg(struct ipc_msg *msg);
 #endif

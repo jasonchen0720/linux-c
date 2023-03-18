@@ -1,5 +1,12 @@
 /*
  * Copyright (c) 2020, <-Jason Chen->
+ * Version: 1.2.1 - 20230316
+ *				  - Optimize ipc_server_bind(IPC_COOKIE_ASYNC):
+ *					Remove allocating fixed length of ipc_msg for ipc_async in ipc_server_bind(),
+ *					and move the buffer allocating to ipc_async_execute().
+ *				  - Optimize ipc_async_execute():
+ *					Add arg @size for allocating specific length of ipc_msg for ipc_async.
+ *				  - Modify log tag, using comm instead.
  * Version 1.1.0. modified at 2020/05/20
  * Author: Jie Chen <jasonchen0720@163.com>
  * Brief : IPC internal definitions
@@ -9,6 +16,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
 #include <sys/select.h>
@@ -16,11 +24,32 @@
 #include "ipc_log.h"
 #include "ipc_base.h"
 #include "ipc_common.h"
-static const char *__base_tag = "base";
+static const char *__base_tag = DUMMY_NAME;
 #define __LOGTAG__ __base_tag
-void base_tag(const char *tag)
+const char * self_name()
 {
-	__base_tag = tag ? tag : "base";
+	static char name[17] = DUMMY_NAME;
+	const char **p = &__base_tag;
+	int done = !ATOMIC_BCS(p, DUMMY_NAME, name);
+	if (done)
+		return name;
+	int fd = open("/proc/self/comm", O_RDONLY);
+	if (fd < 0)
+		goto err;
+	int size = read(fd, name, sizeof(name) - 1);
+	if (size <= 0) {
+		close(fd);
+		goto err;
+	}
+	close(fd);
+	if (name[size - 1] == '\n')
+		name[size - 1] = '\0';
+	else
+		name[size] = '\0';
+	return (const char *)name;
+err:
+	sprintf(name, "%d", getpid());
+	return (const char *)name; 
 }	
 /* 
  *	4-byte or 8-byte aligned 
@@ -183,6 +212,18 @@ retry:
 	} while (1);
 	return IPC_RECEIVE_ERR;
 }
+struct ipc_msg * ipc_clone_msg(const struct ipc_msg *msg, unsigned int size)
+{
+	size_t s = __data_len(msg);
+	size += sizeof(struct ipc_msg);
+	struct ipc_msg * clone_msg = (struct ipc_msg *)malloc(size > s ? size : s);
+
+	if (clone_msg) {
+		memcpy(clone_msg, msg, s);
+	}
+	IPC_LOGI("clone message: %p", clone_msg);
+	return clone_msg;
+}
 struct ipc_msg * ipc_alloc_msg(unsigned int size)
 {
 	struct ipc_msg * msg = (struct ipc_msg *)malloc(sizeof(struct ipc_msg) + size);
@@ -192,11 +233,11 @@ struct ipc_msg * ipc_alloc_msg(unsigned int size)
 		msg->flags	= 0;
 		msg->data_len = 0;
 	}
-	IPC_LOGI("alloc message buf: %p", msg);
+	IPC_LOGI("alloc message: %p", msg);
 	return msg;
 }
 void ipc_free_msg(struct ipc_msg *msg)
 {
-	IPC_LOGI("free message buf: %p", msg);
+	IPC_LOGI("free message: %p", msg);
 	free((void *)msg);
 }

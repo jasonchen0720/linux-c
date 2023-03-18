@@ -424,7 +424,7 @@ void rb_remove(struct rb_node *node, struct rb_tree *tree)
 		 * If the parent of removing node is null, 
 		 * this indicates the removing node is root node, set the replace node as the new root node.
 		 */
-		/* <pair> */
+		/* <pair> : replace->parent */
 		if (node->parent) {
 			if (node->parent->left == node)
 				node->parent->left = replace;
@@ -434,7 +434,7 @@ void rb_remove(struct rb_node *node, struct rb_tree *tree)
 			tree->root = replace;
 		replace->parent = node->parent;
 		
-		/* <pair> */
+		/* <pair> : replace->left */
 		replace->left = node->left;
 		node->left->parent = replace;
 
@@ -442,11 +442,12 @@ void rb_remove(struct rb_node *node, struct rb_tree *tree)
 		if (parent == node)
 			parent = replace;
 		else {
-			/* child */
+			/* delete and link the child to the new parent */
 			if (child)
 				child->parent = parent;
 			parent->left = child;
-			/* <pair> */
+			
+			/* <pair>  : replace->right */
 			replace->right = node->right;
 			node->right->parent = replace;
 		}

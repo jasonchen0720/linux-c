@@ -1,6 +1,13 @@
 /*
  * Copyright (c) 2017, <-Jason Chen->
- * Version: 1.2.0 - 20220216
+ * Version: 1.2.1 - 20230316
+ *				  - Optimize ipc_server_bind(IPC_COOKIE_ASYNC):
+ *					Remove allocating fixed length of ipc_msg for ipc_async in ipc_server_bind(),
+ *					and move the buffer allocating to ipc_async_execute().
+ *				  - Optimize ipc_async_execute():
+ *					Add arg @size for allocating specific length of ipc_msg for ipc_async.
+ *				  - Modify log tag, using comm instead.
+ *			1.2.0 - 20220216
  *				  - New feature: 
  *					1. Add struct ipc_async and related APIs named ipc_async_xxx().
  *                     With IPC async, server has the ability to response to client asynchronously.
@@ -180,7 +187,6 @@ static struct ipc_pool __ipc_async_pool = {
 	.ntasks		= 0,
 	.linger		= 0,
 };
-#define IPC_ASYNC_IDLE_MSG	-1
 static void ipc_async_task_cleanup(void *arg)
 {
 	struct ipc_pool *pool = arg;
@@ -210,9 +216,9 @@ static void ipc_async_cleanup(void *arg)
 		IPC_LOGI("IPC async proc msg:%d, flags:%04x.", task->async->msg->msg_id, task->async->msg->flags);
 		if (task->async->msg->flags & IPC_FLAG_REPLY)
 			send_msg(task->async->sevr->sock, task->async->msg);
-		task->async->msg->msg_id   = IPC_ASYNC_IDLE_MSG;
-		task->async->msg->flags    = 0;
-		task->async->msg->data_len = 0;
+		
+		ipc_free_msg(task->async->msg);
+		task->async->msg 	 = NULL;
 		task->async->state 	 = ASYNC_IDLE;
 		task->async->func	 = NULL;
 		task->async->release = NULL;
@@ -340,8 +346,9 @@ static void ipc_async_exit(struct ipc_pool * pool)
 	pthread_attr_destroy(&pool->attr);
 	pthread_condattr_destroy(&__ipc_cond_attr);
 }
-int ipc_async_execute(void *cookie, /* @cookie: We assert that it  is type of struct ipc_async */
-				struct ipc_msg *msg,    	  /* @msg : Buffer size provided by ipc_server_bind() */
+int ipc_async_execute(void *cookie,	/* @cookie: We assert that it  is type of struct ipc_async */
+				struct ipc_msg *msg,		/* @msg : IPC request to execute asynchronously */
+				unsigned int size,			/* @size: Max size of response */
 				void (*func)(struct ipc_msg *, void *), 
 				void (*release)(struct ipc_msg *, void *), void *arg)
 {
@@ -360,17 +367,20 @@ int ipc_async_execute(void *cookie, /* @cookie: We assert that it  is type of st
 	struct ipc_pool *pool = core->pool;
 	struct ipc_async *async = cookie;
 	pthread_mutex_lock(pool->mutex);
-	if (async->state != ASYNC_IDLE)
-		goto busy;
+	if (async->state != ASYNC_IDLE) {
+		IPC_LOGE("IPC async busy state:%d.", async->state);
+		goto err;
+	}
+	assert(async->msg == NULL);
 	async->func 	= func;
 	async->release	= release;
 	async->arg		= arg;
 	async->state	= ASYNC_PENDING;
-	async->msg->msg_id 	= msg->msg_id;
-	async->msg->flags  	= msg->flags;
-	async->msg->from	= msg->from;
-	async->msg->data_len= msg->data_len;
-	memcpy(async->msg->data, msg->data, msg->data_len);
+	async->msg = ipc_clone_msg(msg, size);
+	if (!async->msg) {
+		IPC_LOGE("IPC async none memory.");
+		goto err;
+	}
 	msg->flags |= __bit(IPC_BIT_ASYNC);
 
 	list_add_tail(&async->list, &pool->async_head);
@@ -382,26 +392,19 @@ int ipc_async_execute(void *cookie, /* @cookie: We assert that it  is type of st
 	}
 	pthread_mutex_unlock(pool->mutex);
 	return 0;
-busy:
-	IPC_LOGE("IPC async busy state:%d.\n", async->state);
+err:
 	pthread_mutex_unlock(pool->mutex);
 	return -1;
 }
-static struct ipc_async * ipc_async_alloc(const struct ipc_server *sevr, size_t size)
+static struct ipc_async * ipc_async_alloc(const struct ipc_server *sevr)
 {
 	assert(sevr->cookie == NULL);
 	struct ipc_async *async = (struct ipc_async *)malloc(sizeof(struct ipc_async));
 	if (async) {
 		memset(async, 0, sizeof(*async));	
 
-		async->msg  = ipc_alloc_msg(size);
-		if (!async->msg) {
-			IPC_LOGE("IPC async alloc failed.");
-			free(async);
-			return NULL;
-		}
-		async->msg->msg_id = IPC_ASYNC_IDLE_MSG;
 		INIT_LIST_HEAD(&async->list);
+		async->msg 		= NULL;
 		async->sevr 	= sevr;
 		async->state	= ASYNC_IDLE;
 		async->type 	= IPC_COOKIE_ASYNC;
@@ -421,7 +424,8 @@ static void ipc_async_release(struct ipc_pool *pool, struct ipc_async *async)
 		IPC_LOGI("IPC async free:%p.", async);
 		if (async->release)
 			async->release(async->msg, async->arg);
-		ipc_free_msg(async->msg);
+		if (async->msg)
+			ipc_free_msg(async->msg);
 		free(async);
 		break;
 	case ASYNC_EXECUTING:
@@ -524,11 +528,11 @@ static const char * peer_name(const struct ipc_server *sevr)
 	sprintf(path, "/proc/%d/comm", sevr->identity);
 	int fd = open(path, O_RDONLY);
 	if (fd < 0)
-		return "dummy";
+		return DUMMY_NAME;
 	int size = read(fd, name, sizeof(name) -1);
 	if (size <= 0) {
 		close(fd);
-		return "dummy";
+		return DUMMY_NAME;
 	}
 	close(fd);
 	if (name[size - 1] == '\n')
@@ -619,7 +623,7 @@ static int ipc_handler_invoke(struct ipc_core *core, struct ipc_server *s, struc
 	if (core->handler(msg, core->arg, s->cookie) < 0)
 		return 0;
 	if (msg->flags & __bit(IPC_BIT_ASYNC)) {
-		IPC_LOGI("No response for async message.");
+		IPC_LOGI("IPC async message:%d.", msg->msg_id);
 		return 0;
 	}
 	/* check if this message with a response */
@@ -984,6 +988,7 @@ static int ipc_broker_register(struct ipc_core *core, int sock, struct ipc_msg *
 	if (ipc_server_manager(core, &peer->sevr, IPC_CLIENT_REGISTER, reg->data) < 0) {
 		msg->data_len = 0;
 		send_msg(sock, msg);
+		IPC_LOGE("Manager refused.");
 		goto __error;
 	}
 	IPC_LOGI("%d register, client %d:%s, sk: %d, mask: %04lx",
@@ -1317,7 +1322,7 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 	core->arg	  = NULL;
 	core->pool	  = NULL;
 	core->path 	  = (const char *)path;
-	core->server  = (const char *)serv;
+	core->server  = self_name();
 #ifdef IPC_PERF
 	core->nfds	  = 0;
 	FD_ZERO(&core->rfds);
@@ -1332,7 +1337,6 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 	core->dummy	  = &__ipc_dummy;
 	core->flags |= IPC_CORE_F_INITED;
 	
-	base_tag(core->server);
 	return 0;
 }
 /**
@@ -1398,7 +1402,6 @@ int ipc_server_exit()
 	if (core->pool)
 		ipc_async_exit(core->pool);
 	
-	base_tag(NULL);
 	IPC_LOGI("IPC exit.");
 	return 0;
 }
@@ -1607,7 +1610,7 @@ int ipc_server_setopt(int opt, void *arg)
  *		  IPC_COOKIE_USER:
  *		   - Callers can define their own cookie type, but must match with the template of cookie, see struct ipc_cookie.
  *	 	  IPC_COOKIE_ASYNC:
- *		   - @cookie must be set as an unsigned integer value to indicate max IPC msg buffer size used in IPC async callback.
+ *		   - @cookie passed as null, IPC will create a cookie of type ipc_async internally.
  * @cookie: Client cookie to be used in callbacks.
  *			Private cookie type values need to be defined less than IPC_COOKIE_USER(0x8000).
  *          
@@ -1624,7 +1627,7 @@ int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie)
 	}
 
 	if (type == IPC_COOKIE_ASYNC) {
-		struct ipc_async *async = ipc_async_alloc(sevr, (size_t)cookie);
+		struct ipc_async *async = ipc_async_alloc(sevr);
 		if (!async)
 			return -1;
 

@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2017, <-Jason Chen->
+ * Version: 1.2.1 - 20230316
+ *				  - Modify log tag, using comm instead.
  * Version: 1.2.0 - 20220216
  *                - Add registering information option for client registering - See changes in ipc_subscriber_register(). 
  *				  - Code Robustness optimize: 
@@ -38,39 +40,19 @@
 #define __LOGTAG__ __client_name
 static pthread_once_t __client_once = PTHREAD_ONCE_INIT;
 static pid_t 		__client_pid  = 0;
-static const char * __client_name = "dummy";
+static const char * __client_name = DUMMY_NAME;
 #define client_valid(client) (get_state(client) == IPC_S_CONNECTED && \
-							  (client)->sock > 0 && \
+							  (client)->sock >= 0 && \
 							  (client)->identity > 0 && \
 							  (client)->identity == __client_pid)	
-static const char * client_name()
-{
-	static char name[32] = {0};
-	int fd = open("/proc/self/comm", O_RDONLY);
-	if (fd < 0)
-		return "dummy";
-	int size = read(fd, name, sizeof(name) -1);
-	if (size <= 0) {
-		close(fd);
-		return "dummy";
-	}
-	close(fd);
-	if (name[size - 1] == '\n')
-		name[size - 1] = '\0';
-	else
-		name[size] = '\0';
-	return (const char *)name;
-}
 static void client_back (void)
 {
 	__client_once = PTHREAD_ONCE_INIT;
-	base_tag(NULL);
 }
 static void client_init(void) 
 {
-	__client_pid 	= getpid();
-	__client_name  = client_name();
-	base_tag(__client_name);
+	__client_pid   = getpid();
+	__client_name  = self_name();
 	pthread_atfork(NULL, NULL, client_back);
 }
 
@@ -715,11 +697,12 @@ struct ipc_subscriber *ipc_subscriber_register(const char *broker,
 	struct ipc_subscriber *subscriber;
 	subscriber = ipc_subscriber_create(broker, mask, data, size, handler, arg);
 	if (!subscriber) {
-		IPC_LOGE("subscriber init error[topic %lx]",mask);
+		IPC_LOGE("subscriber init error[mask %lx]", mask);
 		return NULL;
 	}
 	if (subscriber->mask) {
 		if (ipc_subscriber_run(subscriber) != 0) {
+			IPC_LOGE("subscriber run error");
 			ipc_subscriber_destroy(subscriber);
 			return NULL;
 		}

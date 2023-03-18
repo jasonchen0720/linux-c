@@ -165,7 +165,7 @@ enum IPC_CLASS
 #define ipc_cookie_type(cookie) ({ struct ipc_cookie *__c = (struct ipc_cookie *)cookie; __c ? __c->type : IPC_COOKIE_NONE; })
 int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie);
 int ipc_subscribed(const struct ipc_server *sevr, unsigned long mask);
-int ipc_async_execute(void *cookie, struct ipc_msg *msg, 
+int ipc_async_execute(void *cookie, struct ipc_msg *msg, unsigned int size, 
 				void (*func)(struct ipc_msg *, void *), 
 				void (*release)(struct ipc_msg *, void *), void *arg);
 

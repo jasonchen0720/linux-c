@@ -78,7 +78,8 @@ struct ipc_negotiation
 		(flag) &= ~(__bit(nr));	\
 	} while (0)
 #define __test_bit(nr, flag)	((flag) & __bit(nr))
-void base_tag(const char *tag);
+#define DUMMY_NAME	"dummy"
+const char * self_name();
 static inline int topic_check(unsigned long topic)
 {
 	return !(topic & (topic -1));
