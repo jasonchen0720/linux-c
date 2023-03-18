@@ -1,79 +1,17 @@
 include $(JASON_WORK_DIR)/config.mk
-include $(JASON_WORK_DIR)/cflags.mk
 
-# executable program name, e.g. myprog 
-#EXECUTABLES :=
-
-# static lib name, e.g. libmylib.a
-STATIC_LIBS :=
-
-# shared lib name, e.g. libmylib.so
-SHARED_LIBS := libjason.so
-
-SRCS :=
-
-CFLAGS += 
-
-# Every subdirectory with source files must be described here
-IFLAGS := \
--I.\
-
+all clean:
+	$(MAKE) -C ./common  $@
 ifeq ($(CONFIG_IPC),y)
-IFLAGS += -I$(JASON_WORK_DIR)/base/ipc/
+	$(MAKE) -C ./ipc  $@
 endif
 ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/base/tree/
+	$(MAKE) -C ./tree  $@
 endif
-IFLAGS += -I$(JASON_WORK_DIR)/lib/include/
-# All of the sources participating in the build are defined here
-ifeq ($(CONFIG_IPC),y)
-SRCS += ./ipcclient/client.c
+ifeq ($(CONFIG_THREAD_POOL),y)
+	$(MAKE) -C ./thread-pool  $@
 endif
-
-%.o: ./%.c
-	@echo 'Building file: $<'
-	$(CC) $(CFLAGS) $(IFLAGS) -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
-	@echo 'Finished building: $<'
-	@echo ' '
-
-OBJS := $(SRCS:.c=.o)
-DEPS := $(SRCS:.c=.d)
-
-USER_OBJS :=$(JASON_WORK_DIR)/base/ipc/libipc.a $(JASON_WORK_DIR)/base/tree/libtree.a
-
-LIBS :=
-
-SHARE_LIBS := -lpthread
-
-SHARE_LDFLAGS :=
-
-# All Target
-all: $(STATIC_LIBS) $(SHARED_LIBS)
-
-# Tool invocations
-#$(EXECUTABLES): $(OBJS) $(USER_OBJS)
-#	@echo 'Building target: $@'
-#	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
-#	@echo 'Finished building target: $@'
-#	@echo ' '
-
-# Tool invocations
-$(STATIC_LIBS): $(OBJS) $(USER_OBJS)
-	@echo 'Building target: $@'
-	$(AR) rcs $(STATIC_LIBS) $(OBJS) $(USER_OBJS) $(LIBS)
-	@echo 'Finished building target: $@'
-	@echo ' '
-
-# Tool invocations
-$(SHARED_LIBS): $(OBJS) $(USER_OBJS)
-	@echo 'Building target: $@'
-	$(CC) $(SHARE_LDFLAGS) -shared -o $(SHARED_LIBS) $(OBJS) $(USER_OBJS) $(SHARE_LIBS)
-	@echo 'Finished building target: $@'
-	@echo  ' '
-
-clean:
-	-$(RM) $(OBJS) $(DEPS) $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
-	-@echo ' '
-
-.PHONY: all clean
-.SECONDARY:
+ifeq ($(CONFIG_TMR),y)
+	$(MAKE) -C ./timer  $@
+endif
+	$(MAKE) -f ./jason.mk $@

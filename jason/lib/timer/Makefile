@@ -17,13 +17,13 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/base/include \
+-I$(JASON_WORK_DIR)/lib/include \
 
 ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/base/tree
+IFLAGS += -I$(JASON_WORK_DIR)/lib/tree
 endif
 ifeq ($(CONFIG_THREAD_POOL),y)
-IFLAGS += -I$(JASON_WORK_DIR)/base/thread-pool
+IFLAGS += -I$(JASON_WORK_DIR)/lib/thread-pool
 endif
 
 # All of the sources participating in the build are defined here

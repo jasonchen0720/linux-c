@@ -2,51 +2,32 @@ include $(JASON_WORK_DIR)/config.mk
 include $(JASON_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES := test
+#EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
 STATIC_LIBS :=
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS :=
+SHARED_LIBS := libjason.so
 
 SRCS :=
 
-CFLAGS +=
+CFLAGS += 
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/lib/include \
--I$(JASON_WORK_DIR)/lib/ipcclient
 
 ifeq ($(CONFIG_IPC),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc
+IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc/
 endif
 ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/tree
+IFLAGS += -I$(JASON_WORK_DIR)/lib/tree/
 endif
-ifeq ($(CONFIG_TMR),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/timer
-endif
-
-#ld
-LDFLAGS :=
-
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/ipc/
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/
+IFLAGS += -I$(JASON_WORK_DIR)/lib/include/
 # All of the sources participating in the build are defined here
-SRCS += \
-./test.c
 ifeq ($(CONFIG_IPC),y)
-SRCS += test_ipc.c
-endif
-ifeq ($(CONFIG_TREE),y)
-SRCS += test_tree.c
-SRCS += ccl.c
-endif
-ifeq ($(CONFIG_TMR),y)
-SRCS += test_timer.c
+SRCS += ./ipcclient/client.c
 endif
 
 %.o: ./%.c
@@ -58,36 +39,23 @@ endif
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := \
-$(JASON_WORK_DIR)/lib/common/libbase.a
+USER_OBJS :=$(JASON_WORK_DIR)/lib/ipc/libipc.a $(JASON_WORK_DIR)/lib/tree/libtree.a
 
-ifeq ($(CONFIG_IPC),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/ipc/libipc.a
-endif
-ifeq ($(CONFIG_TREE),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/tree/libtree.a
-endif
-ifeq ($(CONFIG_TMR),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/timer/libtm.a
-endif
-ifeq ($(CONFIG_THREAD_POOL),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/thread-pool/libthread-pool.a
-endif
-LIBS := -ljason -lpthread
+LIBS :=
 
-SHARE_LIBS :=
+SHARE_LIBS := -lpthread
 
 SHARE_LDFLAGS :=
 
 # All Target
-all: $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
+all: $(STATIC_LIBS) $(SHARED_LIBS)
 
 # Tool invocations
-$(EXECUTABLES): $(OBJS) $(USER_OBJS)
-	@echo 'Building target: $@'
-	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
-	@echo 'Finished building target: $@'
-	@echo ' '
+#$(EXECUTABLES): $(OBJS) $(USER_OBJS)
+#	@echo 'Building target: $@'
+#	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
+#	@echo 'Finished building target: $@'
+#	@echo ' '
 
 # Tool invocations
 $(STATIC_LIBS): $(OBJS) $(USER_OBJS)

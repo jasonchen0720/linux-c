@@ -66,7 +66,7 @@ void rbt_test(int argc, char **argv)
 	}
 	rb_print(tree);
 	printf("rb_count : %lu, red: %d  black: %d.\n", tree->rb_count, red, black);
-	for (i = 0; i < 5;) {
+	for (i = 0; i < 5 && i < tree->rb_count;) {
 		int r = rand() % 100;
 		n = rb_search(&r, tree);
 		if (n) {
