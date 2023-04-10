@@ -1,5 +1,9 @@
 /*
  * Copyright (c) 2017, <-Jason Chen->
+ * Version: 1.2.2 - 20230406
+ *				  - Add epoll support.
+ *				  - Optimize and strengthen: ipc_timing_register()/ipc_timing_unregister():
+ *                  Only allow them called in IPC core running context.       
  * Version: 1.2.1 - 20230316
  *				  - Optimize ipc_server_bind(IPC_COOKIE_ASYNC):
  *					Remove allocating fixed length of ipc_msg for ipc_async in ipc_server_bind(),
@@ -44,12 +48,20 @@
 #include <signal.h>
 #include <pthread.h>
 #include <sys/un.h>
-#include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include "ipc_server.h"
 #include "ipc_log.h"
 #include "ipc_base.h"
-#define IPC_PERF
+#define IPC_PERF	1
+#define IPC_EPOLL	1
+#define IPC_DEBUG	1
+#if IPC_EPOLL
+#include <limits.h>
+#include <sys/epoll.h>
+#else
+#include <sys/select.h>
+#endif
 struct ipc_task
 {
 	pthread_t tid;
@@ -116,7 +128,9 @@ struct ipc_proxy
 };
 struct ipc_core {
 	struct list_head timing;
-#ifdef IPC_PERF
+#if IPC_EPOLL
+	int epfd;
+#elif IPC_PERF
 	int				nfds;
 	fd_set 			rfds; /* In case of performance bottlenecks, using epoll instead. */
 #endif	
@@ -150,6 +164,7 @@ struct ipc_core {
 	const char *path;
 	const char *server;
 	int flags;
+	int tid;
 };
 #define IPC_CORE_F_INITED	0x1
 #define IPC_CORE_F_RUN		0x2
@@ -164,9 +179,12 @@ static struct ipc_core 		__ipc_core =
 {
 	.flags = 0,
 };
+#define gettid()	syscall(__NR_gettid)
 #define current_core() 	(&__ipc_core)
 #define __LOGTAG__ (current_core()->server)
 #define ipc_core_inited(c)	((c) && ((c)->flags & IPC_CORE_F_INITED))
+#define ipc_core_running(c)	((c) && ((c)->flags & IPC_CORE_F_RUN))
+#define ipc_core_context(c)	((c)->tid == gettid())
 #define ipc_mutex_lock(mutex)		\
 do {								\
 	if (mutex) 						\
@@ -354,7 +372,8 @@ int ipc_async_execute(void *cookie,	/* @cookie: We assert that it  is type of st
 {
 	struct ipc_core *core = current_core();
 
-	assert(ipc_core_inited(core));
+	if (!ipc_core_running(core))
+		return -1;
 
 	if (!core->pool) {
 		IPC_LOGE("IPC async not enabled.");
@@ -469,7 +488,35 @@ static inline int bit_count(unsigned long mask)
 	}
 	return i;
 }
-#ifdef IPC_PERF
+#if IPC_EPOLL
+static inline void epoll_add(struct ipc_server *sevr, struct ipc_core *core)
+{
+	struct epoll_event ev;
+	ev.events = EPOLLIN; /* | EPOLLET */
+	ev.data.fd 	= sevr->sock;
+	ev.data.ptr = sevr;
+	if (epoll_ctl(core->epfd, EPOLL_CTL_ADD, sevr->sock, &ev) < 0)
+		IPC_LOGE("epoll_ctl(%d) err.", sevr->sock);
+#if IPC_DEBUG	
+	IPC_LOGI("Add socket:%d @%p.", sevr->sock, sevr);
+#endif
+}
+
+static inline void epoll_del(struct ipc_server *sevr, struct ipc_core *core)
+{
+#if 0
+	struct epoll_event ev;
+	ev.events = EPOLLIN;
+	ev.data.fd	= sevr->sock;
+	ev.data.ptr = sevr;
+#endif
+	if (epoll_ctl(core->epfd, EPOLL_CTL_DEL, sevr->sock, NULL) < 0)
+		IPC_LOGE("epoll_ctl(%d) err.", sevr->sock);
+#if IPC_DEBUG	
+	IPC_LOGI("Del socket:%d @%p.", sevr->sock, sevr);
+#endif
+}
+#elif IPC_PERF
 static void fds_add(int sock, struct ipc_core *core)
 {
 	FD_SET(sock, &core->rfds);
@@ -477,13 +524,15 @@ static void fds_add(int sock, struct ipc_core *core)
 		core->nfds = sock;
 
 	IPC_LOGI("add socket:%d current nfds:%d.", sock,  core->nfds);
-	
+#if IPC_DEBUG
 	/* Print for debug */
 	struct ipc_server *s;
 	list_for_each_entry(s, &core->head, list) {
 		IPC_LOGI("socket:%d ISSET:%d.", s->sock, !!FD_ISSET(s->sock, &core->rfds));
 	}
+#endif
 }
+
 static void fds_del(int sock, struct ipc_core *core)
 {
 	FD_CLR(sock, &core->rfds);
@@ -497,12 +546,13 @@ static void fds_del(int sock, struct ipc_core *core)
 		}
 		IPC_LOGI("recalc nfds:%d.", core->nfds);
 	}
-	
+#if IPC_DEBUG
 	/* Print for debug */
 	struct ipc_server *s;
 	list_for_each_entry(s, &core->head, list) {
 		IPC_LOGI("socket:%d ISSET:%d.", s->sock, !!FD_ISSET(s->sock, &core->rfds));
 	}
+#endif
 }
 #endif
 static inline void sevr_init(struct ipc_core *core, struct ipc_server *sevr,
@@ -517,7 +567,9 @@ static inline void sevr_init(struct ipc_core *core, struct ipc_server *sevr,
 	sevr->handler	= handler;
 	sevr->cookie 	= NULL;
 	list_add_tail(&sevr->list, &core->head);
-#ifdef IPC_PERF
+#if IPC_EPOLL
+	epoll_add(sevr, core);
+#elif IPC_PERF
 	fds_add(sock, core);
 #endif
 }
@@ -575,29 +627,55 @@ static inline int node_hash_bucket_init(struct ipc_core *core)
 	IPC_LOGI("node hash bucket initialized.");
 	return 0;
 }
-static int timing_time(struct timeval *tv)
+
+static inline void timing_time(struct timeval *tv)
 {	
-	struct timespec ts;
-	if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
-		return -1;
+	struct timespec ts = {0};
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 	tv->tv_sec 	= ts.tv_sec;
-	tv->tv_usec = ts.tv_nsec / 1000;
-	return 0;
+#if IPC_EPOLL
+	tv->tv_usec = ts.tv_nsec / 1000000;	/* Convert to millisecond */
+#else
+	tv->tv_usec = ts.tv_nsec / 1000;	/* Convert to microsecond */
+#endif
 }
-static int timing_refresh(struct ipc_timing *timing, const struct timeval *tv)
+
+static int timing_refresh(struct ipc_timing *timing, const struct timeval *now)
 {	
-	struct timespec ts;
-	if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
-		return -1;
-	timing->expire.tv_sec 	= ts.tv_sec;
-	timing->expire.tv_usec 	= ts.tv_nsec / 1000;
-	timing->expire.tv_sec 	+= tv->tv_sec;
-	timing->expire.tv_usec 	+= tv->tv_usec;
+	if (now) {
+		timing->expire.tv_sec  = now->tv_sec;
+		timing->expire.tv_usec = now->tv_usec;
+	} else
+		timing_time(&timing->expire);
+	timing->expire.tv_sec  += timing->tv.tv_sec;
+#if IPC_EPOLL
+	/* timing->expire->tv_usec is used to save the millisecond part */
+	timing->expire.tv_usec += timing->tv.tv_usec / 1000;
+	while (timing->expire.tv_usec >= 1000) {
+		timing->expire.tv_sec++;
+		timing->expire.tv_usec -= 1000;
+	}
+#else
+	/* timing->expire->tv_usec is used to save the microsecond part */
+	timing->expire.tv_usec += timing->tv.tv_usec;
 	while (timing->expire.tv_usec >= 1000000) {
 		timing->expire.tv_sec++;
 		timing->expire.tv_usec -= 1000000;
 	}
+#endif
 	return 0;
+}
+
+static void timing_insert(struct ipc_core *core, struct ipc_timing *timing)
+{
+	struct ipc_timing *tmp;
+	struct list_head *p;
+	list_for_each(p, &core->timing) {
+		tmp = list_entry(p, struct ipc_timing, list);
+		if (timercmp(&timing->expire, &tmp->expire, <))
+			break;
+	}
+	list_add_tail(&timing->list, p);
 }
 static int ipc_handler_invoke(struct ipc_core *core, struct ipc_server *s, struct ipc_msg *msg)
 {
@@ -719,7 +797,9 @@ static void ipc_release(struct ipc_core *core, struct ipc_server *sevr)
 		break;
 	}
 	list_delete(&sevr->list);
-#ifdef IPC_PERF
+#if IPC_EPOLL
+	epoll_del(sevr, core);
+#elif IPC_PERF
 	fds_del(sevr->sock, core);
 #endif	
 	close(sevr->sock);
@@ -893,6 +973,10 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 		goto __recv;
 	
 	IPC_LOGE("error: recv length: %d, errno: %d", len, errno);
+#if 0
+	if (errno == EAGAIN || errno == EWOULDBLOCK)
+		return 0;
+#endif
   __error:
 	ipc_release(core, ipc);
 	return -1;
@@ -1093,6 +1177,8 @@ static int ipc_master_socket_handler(struct ipc_core *core, struct ipc_server *i
 	} else {
 		if (errno == EINTR)
 			goto __accept;
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return 0;
 		return -1;
 	}
 }
@@ -1140,6 +1226,11 @@ static int ipc_master_init(struct ipc_core *core)
 	sock = ipc_socket_create(core->path);
 	if (sock < 0)
 		return -1;
+
+	if (sock_opts(sock, 0) == -1) {
+		close(sock);
+		return -1;
+	}
 	master = ipc_server_create(core, IPC_CLASS_MASTER, 0, sock,
 		ipc_master_socket_handler);
 	if (master == NULL) {
@@ -1147,11 +1238,6 @@ static int ipc_master_init(struct ipc_core *core)
 		return -1;
 	}
 
-	if (fcntl(sock, F_SETFD, FD_CLOEXEC) == -1) {
-		close(sock);
-		return -1;
-	}
-	
 	IPC_LOGI("master sock:%d", master->sock);
 	return 0;
 }
@@ -1162,21 +1248,16 @@ static int ipc_master_init(struct ipc_core *core)
  */
 int ipc_timing_register(struct ipc_timing *timing)
 {
-	struct ipc_timing *tmp;
-	struct list_head *p;
 	struct ipc_core *core = current_core();
 	if (!ipc_core_inited(core))
 		return -1;
-	timing_refresh(timing, &timing->tv);
-	ipc_mutex_lock(core->mutex);
-	list_del_init(&timing->list);
-	list_for_each(p, &core->timing) {
-		tmp = list_entry(p, struct ipc_timing, list);
-		if (timercmp(&timing->expire, &tmp->expire, <))
-			break;
+	if (!ipc_core_context(core)) {
+		IPC_LOGE("Not IPC context@%d.", gettid());
+		return -1;
 	}
-	list_add_tail(&timing->list, p);
-	ipc_mutex_unlock(core->mutex);
+	timing_refresh(timing, NULL);
+	list_del_init(&timing->list);
+	timing_insert(core, timing);
 	return 0;	
 }
 int ipc_timing_unregister(struct ipc_timing *timing)
@@ -1184,9 +1265,11 @@ int ipc_timing_unregister(struct ipc_timing *timing)
 	struct ipc_core *core = current_core();
 	if (!ipc_core_inited(core))
 		return -1;
-	ipc_mutex_lock(core->mutex);
+	if (!ipc_core_context(core)) {
+		IPC_LOGE("Not IPC context%d.", gettid());
+		return -1;
+	}
 	list_del_init(&timing->list);
-	ipc_mutex_unlock(core->mutex);
 	return 0;
 }
 int ipc_timing_refresh(struct ipc_timing *timing, const struct timeval *tv)
@@ -1214,6 +1297,70 @@ int ipc_timing_release()
  * ipc_loop - run the ipc core
  * @core: ipc core to run
  */
+#if IPC_EPOLL
+static int ipc_loop(struct ipc_core *core)
+{
+	int res;
+	int timeout;
+	struct timeval now;
+	struct ipc_timing *timing;
+	struct ipc_server *sevr;
+	struct epoll_event events[32];
+	while ((core->flags & IPC_CORE_F_RUN) && !list_empty(&core->head)) {
+		if (!list_empty(&core->timing)) {
+			timing_time(&now);
+			timing = list_first_entry(&core->timing, struct ipc_timing, list);
+			if (timercmp(&now, &timing->expire, <)) {
+				/* timing->expire->tv_usec is used to save the millisecond part */
+				int64_t ms = (timing->expire.tv_sec - now.tv_sec) * 1000 + (timing->expire.tv_usec - now.tv_usec);
+				timeout = ms > INT_MAX ? INT_MAX : (int)ms;
+			#if IPC_DEBUG
+				printf("{%ld %ld} {%ld %ld} timeout:%d\n", timing->expire.tv_sec, timing->expire.tv_usec, now.tv_sec, now.tv_usec, timeout);
+			#endif
+			} else {
+				timeout = 0;
+			}
+		} else timeout = -1;
+
+		res = epoll_wait(core->epfd, events, 32, timeout);
+		if (res > 0) {
+			int n = 0;
+			for (n = 0; n < res; n++) {
+				sevr = events[n].data.ptr;
+				sevr->handler(core, sevr);
+			#if IPC_DEBUG
+				IPC_LOGI("event socket:%d @%p.", sevr->sock, sevr);
+			#endif
+			}
+		} else if (res < 0){
+			if (errno == EINTR) {
+				continue;
+			}
+			IPC_LOGE("epoll_wait error:%d", errno);
+			break;
+		}
+		if (!list_empty(&core->timing)) {
+			struct ipc_timing *t;
+			timing_time(&now);
+			list_for_each_entry_safe(timing, t, &core->timing, list) {
+				if (timercmp(&now, &timing->expire, <))
+					break;
+			
+			#if IPC_DEBUG
+				printf("{%ld %ld} {%ld %ld} expired!\n", timing->expire.tv_sec, timing->expire.tv_usec, now.tv_sec, now.tv_usec);
+			#endif
+				list_del_init(&timing->list);
+				if (timing->cycle) {
+					timing_refresh(timing, &now);
+					timing_insert(core, timing);
+				}
+				timing->handler(timing);
+			}
+		}
+	}
+	return -1;
+}
+#else
 static int ipc_loop(struct ipc_core *core)
 {
 	int res;
@@ -1259,10 +1406,11 @@ static int ipc_loop(struct ipc_core *core)
 			timing_time(&now);
 			list_for_each_entry_safe(timing, tt, &core->timing, list) {
 				if (!timercmp(&now, &timing->expire, <)) {
-					if (timing->cycle)
-						ipc_timing_register(timing);
-					else
-						ipc_timing_unregister(timing);
+					list_del_init(&timing->list);
+					if (timing->cycle) {
+						timing_refresh(timing, &now);
+						timing_insert(core, timing);
+					}
 					timing->handler(timing);
 				} else break;
 			}
@@ -1284,6 +1432,7 @@ static int ipc_loop(struct ipc_core *core)
 	}
 	return -1;
 }
+#endif
 /**
  * ipc_server_init - init the ipc core
  * @server: the name of ipc server
@@ -1323,7 +1472,9 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 	core->pool	  = NULL;
 	core->path 	  = (const char *)path;
 	core->server  = self_name();
-#ifdef IPC_PERF
+#if IPC_EPOLL
+	core->epfd = epoll_create(1024);
+#elif IPC_PERF
 	core->nfds	  = 0;
 	FD_ZERO(&core->rfds);
 #endif
@@ -1335,6 +1486,7 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 		return -1;
 	}
 	core->dummy	  = &__ipc_dummy;
+	core->tid     = gettid();
 	core->flags |= IPC_CORE_F_INITED;
 	
 	return 0;
@@ -1355,10 +1507,11 @@ int ipc_server_run()
 		core->buf = alloc_buf(IPC_MSG_BUFFER_SIZE);
 	if (!core->buf)
 		return -1;
-	IPC_LOGI("mutex:%p,filter:%p,manager:%p, buf size:%u", core->mutex,
+	core->tid = gettid();
+	IPC_LOGI("mutex:%p,filter:%p,manager:%p, buf size:%u, context@%d", core->mutex,
 			core->filter,
 			core->manager,
-			core->buf->size);
+			core->buf->size, core->tid);
 	core->flags |= IPC_CORE_F_RUN;
 	return ipc_loop(core);
 }
@@ -1423,7 +1576,7 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
 	struct ipc_node *node;
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;
 	struct ipc_core *core = current_core();
-	if (!ipc_core_inited(core))
+	if (!ipc_core_running(core))
 		return -1;
 	if (!topic_check(topic))
 		return -1;
@@ -1456,7 +1609,7 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
  * ipc_server_notify - if the server as broker, server can call this function to notify a client
  *  <!- Non-thread-safe, it is safely calling in context of handler passed by ipc_server_init(). Calling in other thread, 
  *      caller needs to do resource competition protection in command:IPC_CLIENT_RELEASE of ipc_client_manager() -!>
- * @cli: client the message sent to
+ * @sevr: client the message sent to
  * @topic: message type
  * @msg_id: message id
  * @data: message data, if no data carried, set NULL
@@ -1470,7 +1623,7 @@ int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int ms
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;
 	struct ipc_core *core = current_core();
 	
-	if (!ipc_core_inited(core))
+	if (!ipc_core_running(core))
 		return -1;
 	
 	struct ipc_peer *peer = container_of(sevr, struct ipc_peer, sevr);

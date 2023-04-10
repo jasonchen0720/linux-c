@@ -9,10 +9,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <limits.h>
 #include "ipc_client.h"
 #include "ipc_server.h"
 #include "client.h"
 static int sig_pipe = 0;
+static time_t g_start;
 static int indication_msg_callback(int msg_id, void *data, int size, void *arg)
 {
 	printf("--->ind msg coming : %04d: %s\n", msg_id, (char *)data);
@@ -78,8 +80,8 @@ static int sig_proxy_handler(int fd, void *arg)
 	} while (1);
 	switch (sig) {
 		case SIGALRM:
-			//printf("Alrm... \n");
-			alarm(1);
+			printf("Alrm...%ld \n", time(NULL) - g_start);
+			//alarm(3);
 			break;
 		default:
 			break;
@@ -93,20 +95,49 @@ int sig_proxy_init()
 		return -1;
 	sig_pipe = pipe[1];
 	signal(SIGALRM, signal_handler);
-	//alarm(1);
+	alarm(1);
 	printf("event proxy init success. \n");
 	return pipe[0];
 }
-static int timing_handler(struct ipc_timing *t)
+__attribute__((unused))static int timing_handler(struct ipc_timing *t)
 {
-	static time_t ti = 0;
-	if (!ti)
-		ti = time(NULL);
-	printf("Timing:%ld\n", time(NULL) - ti);
+	printf("******* 0 Timing:%ld\n", time(NULL) - g_start);
+	ipc_timing_register(t);
 	return 0;
 }
+__attribute__((unused))static int timing_handler1(struct ipc_timing *t)
+{
+	printf(" ----------------- 1 Timing:%ld\n", time(NULL) - g_start);
+	//ipc_timing_register(t);
+	return 0;
+}
+static int timing_handler2(struct ipc_timing *t)
+{
+	printf(" ==================================== 2 Timing:%ld\n", time(NULL) - g_start);
+	//ipc_timing_register(t);
+	return 0;
+}
+static int _time()
+{	
+	struct timeval t;
+	struct timeval *tv = &t;
+	struct timespec ts;
+	if (clock_gettime(CLOCK_MONOTONIC, &ts) < 0)
+		return -1;
+	tv->tv_sec 	= ts.tv_sec;
+	tv->tv_usec = ts.tv_nsec / 1000000;
+	printf("Timing:%ld %ld\n", tv->tv_sec ,tv->tv_usec);
+	return 0;
+}
+
 int test_entry_for_ipc(int argc, char **argv)
 {
+	_time();
+
+	sleep(5);
+
+	_time();
+
 	char buf[1024] = {0};
 	unsigned long mask;
 	if (!strcmp(argv[0], "server")) {
@@ -125,7 +156,9 @@ int test_entry_for_ipc(int argc, char **argv)
 		}
 		signal(SIGCHLD, SIG_IGN);
 		pthread_t task_pid;
-		struct ipc_timing test_timing = ipc_timing_initializer(test_timing,1,6,0,NULL,timing_handler);
+		struct ipc_timing test_timing = ipc_timing_initializer(test_timing, 0, 2,0,NULL,timing_handler);
+		struct ipc_timing test_timing1 = ipc_timing_initializer(test_timing1, 1, 3,0,NULL,timing_handler1);
+		struct ipc_timing test_timing2 = ipc_timing_initializer(test_timing2, 1, 5,0,NULL,timing_handler2);
 		if (ipc_server_init(IPC_SERVER_TEST, ipcServerHandler) < 0)
 		{
 			printf("server init error\n");
@@ -136,9 +169,11 @@ int test_entry_for_ipc(int argc, char **argv)
 		pthread_create(&task_pid, NULL, monitor_task, NULL);
 		int fd = sig_proxy_init();
 		ipc_server_proxy(fd, sig_proxy_handler, NULL);
-		//ipc_timing_register(&test_timing);
-
+		ipc_timing_register(&test_timing);
+		ipc_timing_register(&test_timing1);
+		ipc_timing_register(&test_timing2);
 		printf("Run ---- \n");
+		g_start = time(NULL);
 		if (ipc_server_run() < 0) {
 			printf("run error\n");
 			exit(-1);
