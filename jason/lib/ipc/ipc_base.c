@@ -16,7 +16,6 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
 #include <sys/select.h>
@@ -56,13 +55,6 @@ err:
  */
 #define IPC_MSG_ALIGN		0x04
 
-#define move_to_beginning(buf, left) \
-	do {	\
-		memcpy(buf->data, buf->data + buf->head, left);	\
-		buf->head = 0;		\
-		buf->tail = left;	\
-	} while (0)
-
 /**
  * friendly - check if the ipc meesage received is valid
  * @msg: message to check 
@@ -84,11 +76,11 @@ const char * strerr(int err)
 	assert(err > IPC_EMIN && err < IPC_EMAX);
 	return errmsg[err];
 }
-struct ipc_msg * find_msg(struct ipc_buf *buf)
+struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone)
 {
 	int left;
 	int msg_len;
-	IPC_INFO("head: %d, tail: %d.", buf->head, buf->tail);
+	IPC_LOGD("buf size:%u, head:%u, tail:%u.", buf->size, buf->head, buf->tail);
 	for (left = buf->tail - buf->head; left > 0; buf->head += msg_len, left = buf->tail - buf->head){
 		/* 
 		 * If the left size is smaller than the head length of ipc msg,
@@ -113,25 +105,44 @@ struct ipc_msg * find_msg(struct ipc_buf *buf)
 			IPC_LOGE("recv unfriendly message %08x", message->msg_id);
 			continue;
 		}
-		/**
-		 * If current position address is not byte aligned, 
-		 * as the beginning address is always byte aligned, 
-		 * move this message to the beginning of the buffer.
-		 */
-		if (buf->head & (IPC_MSG_ALIGN - 1)) {
-			IPC_LOGW("Not aligned %u, move msg %d bytes", buf->head, msg_len);
-			memcpy(buf->data, buf->data + buf->head, msg_len);
-			message = (struct ipc_msg *)buf->data;
-		}	
+
+		if (clone) {
+			int sticky = left > msg_len || buf->head;
+			if (sticky) {
+				/**
+				 * Copy message to @clone if necessary. 
+				 * In case that the following unprocessed message in the buffer is corrupted.
+				 */
+				IPC_LOGW("message clone:%p, length:%d, head:%u, tail:%u, left %d bytes.", clone, msg_len, buf->head, buf->tail, left - msg_len);
+				memcpy(clone, message, msg_len);
+				message = clone;
+			}
+		} else {
+			if (buf->head & (IPC_MSG_ALIGN - 1)) {
+				/**
+				 * If current position address is not byte aligned, 
+				 * as the beginning address is always byte aligned, 
+				 * move this message to the beginning of the buffer.
+				 */
+				 
+				IPC_LOGW("Not aligned, length:%d, head:%u, tail:%u, left %d bytes", msg_len, buf->head, buf->tail, left - msg_len);
+				memcpy(buf->data, message, msg_len);
+				message = (struct ipc_msg *)buf->data;
+			}
+		}
 		buf->head += msg_len;
-		IPC_INFO("message found: %p, length: %d, head: %d, tail: %d, left %d bytes.", message, msg_len, buf->head, buf->head, left - msg_len);
+		IPC_LOGD("message found:%p, length:%d, head:%u, tail:%u, left %d bytes.", message, msg_len, buf->head, buf->tail, left - msg_len);
 		return message;
 	}
 	return NULL;
   __move:
-  	IPC_LOGW("Incomplete msg, occupied %d bytes, buf size: %u bytes.", left, buf->size);
-	if (buf->head)
-		move_to_beginning(buf, left);
+  	IPC_LOGW("Incomplete msg, buf size:%u, head:%u, tail:%u, left %d bytes.", buf->size, buf->head, buf->tail, left);
+	if (ipc_buf_full(buf) && buf->head) {
+		memcpy(buf->data, buf->data + buf->head, left);
+		buf->head = 0;
+		buf->tail = left;
+		IPC_LOGW("Incomplete msg moved, head:%u, tail:%u.", buf->head, buf->tail);
+	}
 	return NULL;
 }
 /**
@@ -212,6 +223,23 @@ retry:
 	} while (1);
 	return IPC_RECEIVE_ERR;
 }
+struct ipc_buf * alloc_buf(unsigned int size)
+{
+	size += sizeof(struct ipc_msg);
+
+	unsigned int align = size & (IPC_MSG_ALIGN - 1);
+	if (align) {
+		size += (IPC_MSG_ALIGN - align);
+	}
+	struct ipc_buf *buf = (struct ipc_buf *)malloc(sizeof(struct ipc_buf) + size);
+	if (buf) {
+		buf->head = 0u;
+		buf->tail = 0u;
+		buf->size = size;
+	}
+	IPC_LOGI("alloc buf @%p - %u", buf, size);
+	return buf;
+}
 struct ipc_msg * ipc_clone_msg(const struct ipc_msg *msg, unsigned int size)
 {
 	size_t s = __data_len(msg);
@@ -233,11 +261,11 @@ struct ipc_msg * ipc_alloc_msg(unsigned int size)
 		msg->flags	= 0;
 		msg->data_len = 0;
 	}
-	IPC_LOGI("alloc message: %p", msg);
+	IPC_LOGI("alloc message @%p - %u", msg, size);
 	return msg;
 }
 void ipc_free_msg(struct ipc_msg *msg)
 {
-	IPC_LOGI("free message: %p", msg);
+	IPC_LOGI("free message @%p", msg);
 	free((void *)msg);
 }

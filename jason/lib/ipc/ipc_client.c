@@ -12,6 +12,8 @@
  *						Add protection in case of calling ipc_subscriber_unregister() in user's callback context. 
  *                      Add client state.
  *
+ *				  - Fix at 20221103:
+ *						Bug in macro client_valid(client), socket fd may be 0, which is checked in this macro function. 
  *			1.1.1 - 20210917
  *                - Add ipc timing
  *                - Fix segment fault while doing core exit.
@@ -108,7 +110,7 @@ static int ipc_connect(struct ipc_client *client)
 
 	sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sock < 0) {
-        IPC_ERR("Unable to create socket: %s", strerror(errno));
+        IPC_LOGE("Unable to create socket: %s", strerror(errno));
 		return -1;
     }
 	if (sock_opts(sock, 0) < 0) {
@@ -136,7 +138,7 @@ __retry:
 		return -1;
 	}
 	client->sock = sock;
-	IPC_INFO("connect to %s, sk:%d", server_offset(client->server), client->sock);
+	IPC_LOGD("connect to %s, sk:%d", server_offset(client->server), client->sock);
 	return 0;
 }
 static int ipc_request(struct ipc_client* client, struct ipc_msg *msg, unsigned int size, int tmo)
@@ -532,10 +534,11 @@ static int ipc_subscriber_sync(struct ipc_subscriber *subscriber)
 	char buffer[IPC_MSG_MINI_SIZE] = {0};
 	struct ipc_msg *msg = (struct ipc_msg *)buffer;
 	msg->msg_id = IPC_SDK_MSG_SYNC;
-	msg->data_len = sizeof(subscriber->task_id);
+	msg->data_len = sizeof(struct ipc_identity);
 	msg->from = subscriber->client.identity;
-	memcpy(msg->data, &subscriber->task_id, sizeof(subscriber->task_id));
-	IPC_LOGI("sync to server, client:%d-%08lx, mask: %04lx", subscriber->client.identity, subscriber->task_id, subscriber->mask);
+	struct ipc_identity *tid = (struct ipc_identity *)msg->data;
+	tid->identity = gettid();
+	IPC_LOGI("sync to server, client:%d(%d), mask: %04lx", subscriber->client.identity, tid->identity, subscriber->mask);
 	return send_msg(subscriber->client.sock, msg) > 0 ? 0 : -1;
 }
 /**
@@ -566,9 +569,14 @@ static void ipc_subscriber_process(struct ipc_subscriber *subscriber, struct ipc
 	struct ipc_msg *msg;
 	struct ipc_notify *notify;
 	do {
-		msg = find_msg(buf);
-		if (!msg)
+		msg = find_msg(buf, NULL);
+		if (!msg) {
+			if (ipc_buf_full(buf)) {
+				IPC_LOGE("subscriber buffer full, size: %u.%u", buf->tail, buf->size);
+				break;
+			}
 			return;
+		}
 		if (msg->msg_id == IPC_SDK_MSG_NOTIFY) {
 			notify = (struct ipc_notify *)msg->data;
 			if (topic_isset(subscriber, notify->topic) && 
@@ -582,10 +590,9 @@ static void ipc_subscriber_process(struct ipc_subscriber *subscriber, struct ipc
 			IPC_LOGE("unexpected msg:%04x, %d:%d",msg->msg_id, buf->head, buf->tail);
 			break;
 		}
-	} while (buf->head < buf->tail);
-	IPC_INFO("tail: %d, head: %d", buf->tail, buf->head);
-	buf->tail = 0;
-	buf->head = 0;
+	} while (ipc_buf_pending(buf));
+	IPC_LOGD("tail: %d, head: %d", buf->tail, buf->head);
+	ipc_buf_reset(buf);
 }
 
 /**
@@ -604,11 +611,9 @@ static void * ipc_subscriber_task(void *arg)
 						buf->data + buf->tail, 
 						buf->size - buf->tail, 30);
 		if (rc > 0) {
-			IPC_INFO("receive %d bytes, offset: %d.", rc, buf->head);
+			IPC_LOGD("receive %d bytes, offset: %u.", rc, buf->head);
 			buf->tail += rc;
 			ipc_subscriber_process(subscriber, buf);
-			if (buf->tail >= buf->size)
-				IPC_LOGE("subscriber buffer full, size: %u.%u", buf->tail, buf->size);
 		} else {
 			switch (rc) {
 			case IPC_RECEIVE_TMO:
@@ -618,8 +623,7 @@ static void * ipc_subscriber_task(void *arg)
 				IPC_LOGE("receive from %s, error: %s", subscriber->client.server, strerr(-rc));
 				while(subscriber->mask && (ipc_subscriber_repair(subscriber) < 0))
 					sleep(5);
-				buf->head = 0u;
-				buf->tail = 0u;
+				ipc_buf_reset(buf);
 				break;
 			default:
 				break;

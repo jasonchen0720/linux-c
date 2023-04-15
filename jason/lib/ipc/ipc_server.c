@@ -1,7 +1,8 @@
 /*
  * Copyright (c) 2017, <-Jason Chen->
- * Version: 1.2.2 - 20230406
+ * Version: 1.2.3 - 20230410
  *				  - Add epoll support.
+ * Version: 1.2.2 - 20230406
  *				  - Optimize and strengthen: ipc_timing_register()/ipc_timing_unregister():
  *                  Only allow them called in IPC core running context.       
  * Version: 1.2.1 - 20230316
@@ -49,12 +50,11 @@
 #include <pthread.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
 #include "ipc_server.h"
 #include "ipc_log.h"
 #include "ipc_base.h"
 #define IPC_PERF	1
-#define IPC_EPOLL	1
+#define IPC_EPOLL	0
 #define IPC_DEBUG	1
 #if IPC_EPOLL
 #include <limits.h>
@@ -157,6 +157,7 @@ struct ipc_core {
 	int (*manager)(const struct ipc_server *, int, void *, void *, void *);
 	struct ipc_server *dummy;
 	struct ipc_buf	  *buf;
+	struct ipc_msg 	  *clone;
 	struct ipc_pool	  *pool;
 	/* IPC Lock */
 	void   *mutex;
@@ -179,7 +180,6 @@ static struct ipc_core 		__ipc_core =
 {
 	.flags = 0,
 };
-#define gettid()	syscall(__NR_gettid)
 #define current_core() 	(&__ipc_core)
 #define __LOGTAG__ (current_core()->server)
 #define ipc_core_inited(c)	((c) && ((c)->flags & IPC_CORE_F_INITED))
@@ -497,9 +497,8 @@ static inline void epoll_add(struct ipc_server *sevr, struct ipc_core *core)
 	ev.data.ptr = sevr;
 	if (epoll_ctl(core->epfd, EPOLL_CTL_ADD, sevr->sock, &ev) < 0)
 		IPC_LOGE("epoll_ctl(%d) err.", sevr->sock);
-#if IPC_DEBUG	
+	
 	IPC_LOGI("Add socket:%d @%p.", sevr->sock, sevr);
-#endif
 }
 
 static inline void epoll_del(struct ipc_server *sevr, struct ipc_core *core)
@@ -512,9 +511,8 @@ static inline void epoll_del(struct ipc_server *sevr, struct ipc_core *core)
 #endif
 	if (epoll_ctl(core->epfd, EPOLL_CTL_DEL, sevr->sock, NULL) < 0)
 		IPC_LOGE("epoll_ctl(%d) err.", sevr->sock);
-#if IPC_DEBUG	
+	
 	IPC_LOGI("Del socket:%d @%p.", sevr->sock, sevr);
-#endif
 }
 #elif IPC_PERF
 static void fds_add(int sock, struct ipc_core *core)
@@ -768,7 +766,7 @@ static void ipc_release(struct ipc_core *core, struct ipc_server *sevr)
 		ipc_mutex_lock(core->mutex);
 		
 		int i;
-		IPC_INFO("peer: %p, node: %p", peer, peer->node);
+		IPC_LOGD("peer: %p, node: %p", peer, peer->node);
 		for (i = 0; i < bit_count(peer->mask); i++)
 			/*
 			 * Only when |sevr| is set does this node need to been deleted from the list
@@ -843,9 +841,10 @@ static int ipc_broker_sync(struct ipc_core *core,
 	struct ipc_peer *peer = container_of(sevr, struct ipc_peer, sevr);
 	
 	assert(peer->node);
-	
-	IPC_LOGI("sync from client %d ,sk: %d, mask:%04lx",
-							sevr->identity, sevr->sock, peer->mask);
+
+	struct ipc_identity *tid = (struct ipc_identity *)msg->data;
+	IPC_LOGI("sync from client %d(%d) ,sk: %d, mask:%04lx",
+							sevr->identity, tid->identity, sevr->sock, peer->mask);
 	peer_sync(core, peer);
 	ipc_server_manager(core, &peer->sevr, IPC_CLIENT_SYNC, msg->data);
 	return 0;
@@ -925,16 +924,16 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 	int len;
 	struct ipc_buf *buf = core->buf;
 	struct ipc_msg *msg = (struct ipc_msg *)buf->data;
-	buf->head = 0u;
-	buf->tail = 0u;
+	ipc_buf_reset(buf);
   __recv:
 	len = recv(ipc->sock, buf->data + buf->tail, buf->size - buf->tail, 0);
 	if (len > 0) {
+		IPC_LOGD("receive %d bytes, head:%u, tail:%u.", len, buf->head, buf->tail);
 		buf->tail += len;
 		do {
-			msg = find_msg(buf);
+			msg = find_msg(buf, core->clone);
 			if (!msg) {
-				if (buf->tail >= buf->size) goto __error;
+				if (ipc_buf_full(buf)) goto __error;
 				goto __recv;
 			}
 			switch (msg->msg_id) {
@@ -959,7 +958,7 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 					goto __error;
 				break;
 			}
-		} while (buf->head < buf->tail);
+		} while (ipc_buf_pending(buf));
 		return 0;
 	}
 	if (len == 0) {
@@ -1193,7 +1192,7 @@ static int ipc_socket_create(const char *path)
     struct sockaddr_un serv_adr;
     if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
 	{
-        IPC_ERR("Unable to create socket: %s", strerror(errno));
+        IPC_LOGE("Unable to create socket: %s", strerror(errno));
         return -1;
     }
     serv_adr.sun_family = AF_UNIX;
@@ -1203,12 +1202,12 @@ static int ipc_socket_create(const char *path)
     unlink(path);
 
     if (bind(sock, (struct sockaddr *)&serv_adr, (socklen_t)sizeof(struct sockaddr_un)) < 0) {
-        IPC_ERR("Unable to bind socket: %s", strerror(errno));
+        IPC_LOGE("Unable to bind socket: %s", strerror(errno));
 		close(sock);
         return -1;
     }
 	if (listen(sock, BACKLOG) < 0) {
-		IPC_ERR("Unable to listen socket: %s", strerror(errno));
+		IPC_LOGE("Unable to listen socket: %s", strerror(errno));
 		close(sock);
         return -1;
 	}
@@ -1314,9 +1313,7 @@ static int ipc_loop(struct ipc_core *core)
 				/* timing->expire->tv_usec is used to save the millisecond part */
 				int64_t ms = (timing->expire.tv_sec - now.tv_sec) * 1000 + (timing->expire.tv_usec - now.tv_usec);
 				timeout = ms > INT_MAX ? INT_MAX : (int)ms;
-			#if IPC_DEBUG
-				printf("{%ld %ld} {%ld %ld} timeout:%d\n", timing->expire.tv_sec, timing->expire.tv_usec, now.tv_sec, now.tv_usec, timeout);
-			#endif
+				IPC_LOGD("{%ld %ld} {%ld %ld} timeout:%d", timing->expire.tv_sec, timing->expire.tv_usec, now.tv_sec, now.tv_usec, timeout);
 			} else {
 				timeout = 0;
 			}
@@ -1328,9 +1325,7 @@ static int ipc_loop(struct ipc_core *core)
 			for (n = 0; n < res; n++) {
 				sevr = events[n].data.ptr;
 				sevr->handler(core, sevr);
-			#if IPC_DEBUG
-				IPC_LOGI("event socket:%d @%p.", sevr->sock, sevr);
-			#endif
+				IPC_LOGD("event socket:%d @%p.", sevr->sock, sevr);
 			}
 		} else if (res < 0){
 			if (errno == EINTR) {
@@ -1346,9 +1341,7 @@ static int ipc_loop(struct ipc_core *core)
 				if (timercmp(&now, &timing->expire, <))
 					break;
 			
-			#if IPC_DEBUG
-				printf("{%ld %ld} {%ld %ld} expired!\n", timing->expire.tv_sec, timing->expire.tv_usec, now.tv_sec, now.tv_usec);
-			#endif
+				IPC_LOGD("{%ld %ld} {%ld %ld} expired!", timing->expire.tv_sec, timing->expire.tv_usec, now.tv_sec, now.tv_usec);
 				list_del_init(&timing->list);
 				if (timing->cycle) {
 					timing_refresh(timing, &now);
@@ -1387,7 +1380,7 @@ static int ipc_loop(struct ipc_core *core)
 		FD_ZERO(&readfds);
 		nfds = 0;
 		list_for_each_entry(ipc, &core->head, list) {
-			IPC_INFO("socket:%d", ipc->sock);
+			IPC_LOGD("socket:%d", ipc->sock);
 			FD_SET(ipc->sock, &readfds);
 			if (ipc->sock > nfds) nfds = ipc->sock;
 		}
@@ -1507,6 +1500,9 @@ int ipc_server_run()
 		core->buf = alloc_buf(IPC_MSG_BUFFER_SIZE);
 	if (!core->buf)
 		return -1;
+	core->clone = ipc_alloc_msg(core->buf->size);
+	if (!core->clone)
+		return -1;
 	core->tid = gettid();
 	IPC_LOGI("mutex:%p,filter:%p,manager:%p, buf size:%u, context@%d", core->mutex,
 			core->filter,
@@ -1549,6 +1545,10 @@ int ipc_server_exit()
 	if (core->buf) {
 		free(core->buf);
 		core->buf = NULL;
+	}
+	if (core->clone) {
+		ipc_free_msg(core->clone);
+		core->clone = NULL;
 	}
 	core->flags &= ~IPC_CORE_F_INITED;
 	ipc_mutex_unlock(core->mutex);

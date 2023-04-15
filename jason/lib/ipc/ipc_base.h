@@ -8,7 +8,9 @@
  * Date  : Created at 2020/05/20
  */
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include "ipc_common.h"
 #include "ipc_atomic.h"
 #define UNIX_SOCK_DIR "/tmp/"
@@ -59,10 +61,14 @@ struct ipc_buf
 	unsigned int 	size;
 	char 			data[0];
 };
+#define ipc_buf_full(buf)			((buf)->tail >= (buf)->size)
+#define ipc_buf_pending(buf)		((buf)->head < (buf)->tail)
+#define ipc_buf_reset(buf)			((buf)->tail = (buf)->head = 0u)
 struct ipc_negotiation
 {
 	unsigned int 	buf_size;
 };
+#define gettid()					syscall(__NR_gettid)
 #define IPC_NOTIFY_MSG_MAX_SIZE 1024
 #define server_offset(path)			((path) + sizeof(UNIX_SOCK_DIR) - 1)
 #define users_msg(msg)				((msg)->msg_id < IPC_MSG_SDK)
@@ -109,18 +115,9 @@ static inline int send_msg(int sock, struct ipc_msg *msg)
 	msg->msg_id |= IPC_MSG_TOKEN;
 	return send(sock, (void *)msg,  __data_len(msg), MSG_NOSIGNAL | MSG_DONTWAIT);
 }
-static inline struct ipc_buf * alloc_buf(unsigned int size)
-{
-	struct ipc_buf *buf = (struct ipc_buf *)malloc(sizeof(struct ipc_buf) + size);
-	if (buf) {
-		buf->head = 0u;
-		buf->tail = 0u;
-		buf->size = size;
-	}
-	return buf;
-}
+struct ipc_buf * alloc_buf(unsigned int size);
 const char * strerr(int err);
-struct ipc_msg * find_msg(struct ipc_buf *buf);
+struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone);
 int recv_msg(int sock,  char *buf, unsigned int size, int tmo);
 int sock_opts(int sock, int tmo);
 #endif
