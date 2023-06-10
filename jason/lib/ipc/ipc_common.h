@@ -53,7 +53,7 @@ enum {
    /*
  	* Bit 8-9 indicate the message class.
  	*/
-	IPC_BIT_CONNECTOR 	= IPC_BIT_SERVER,
+	IPC_BIT_REQUESTER 	= IPC_BIT_SERVER,
 	IPC_BIT_SUBSCRIBER	= 9,
 	
 	IPC_BIT_ASYNC		= 15,

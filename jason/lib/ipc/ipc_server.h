@@ -99,11 +99,12 @@ typedef int (*ipc_server_handler)(struct ipc_msg *, void *);
 typedef int (*ipc_notify_filter)(struct ipc_notify *, void *);
 enum IPC_MANAGER_CMD
 {
-	 IPC_CLIENT_RELEASE = 1,	/* For subscriber / connector, do your own release work */
-	 IPC_CLIENT_REGISTER,		/* For subscriber / connector, registering stage, do your own register work*/
-	 IPC_CLIENT_SYNC,		    /* For subscriber, indicates client's callback is ready */
-	 IPC_CLIENT_UNREGISTER,		/* For subscriber, unregister normally */
-	 IPC_CLIENT_SHUTDOWN,		/* For subscriber, shutdown abnormally */
+	 IPC_CLIENT_RELEASE = 1,	/* Both for subscriber and requester, releasing stage, do your own release work */
+	 IPC_CLIENT_CONNECT,		/* Only for requester,  connecting stage */
+	 IPC_CLIENT_REGISTER,		/* Only for subscriber, registering stage, do your own register work */
+	 IPC_CLIENT_SYNC,		    /* Only for subscriber, indicates client's callback is ready */
+	 IPC_CLIENT_UNREGISTER,		/* Only for subscriber, unregister normally */
+	 IPC_CLIENT_SHUTDOWN,		/* Only for subscriber, shutdown abnormally */
 };
 /* 
  * int ipc_client_manager(const struct ipc_server *sevr, int cmd, void *data, void *arg, void *cookie);
@@ -148,7 +149,7 @@ int ipc_timing_release();
 enum IPC_CLASS 
 {
 	IPC_CLASS_DUMMY			= 0,
-	IPC_CLASS_CONNECTOR		= 1,
+	IPC_CLASS_REQUESTER		= 1,
 	IPC_CLASS_SUBSCRIBER	= 2,
 	IPC_CLASS_MASTER,
 	IPC_CLASS_PROXY,
@@ -157,7 +158,7 @@ enum IPC_CLASS
  * Return the handle type which received this msg.
  * Return values define in enum IPC_CLASS.
  */
-#define ipc_class(msg)		(((msg)->flags & ((1 << IPC_BIT_CONNECTOR) | (1 << IPC_BIT_SUBSCRIBER))) >> IPC_BIT_SERVER)
+#define ipc_class(msg)		(((msg)->flags & ((1 << IPC_BIT_REQUESTER) | (1 << IPC_BIT_SUBSCRIBER))) >> IPC_BIT_SERVER)
 
 /*
  * Return the private data type, values may be IPC_COOKIE_ASYNC or different values defined by user. 

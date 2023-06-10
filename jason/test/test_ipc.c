@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 #include <fcntl.h>
 #include <limits.h>
 #include "ipc_client.h"
@@ -31,19 +32,21 @@ static int ipcClientManager( struct ipc_server *cli, int cmd, void *data, void *
 {
 	switch (cmd) {
 	case IPC_CLIENT_RELEASE:
-		return 0;
+	case IPC_CLIENT_CONNECT:
+		break;
 	case IPC_CLIENT_REGISTER:
 		if (cli->clazz == IPC_CLASS_SUBSCRIBER)
 			if (ipc_subscribed(cli, 1))
 				ipc_server_notify(cli, 1, 555, "welcome1", sizeof("welcome1"));
-		return 0;
+		break;
 	case IPC_CLIENT_SYNC:
 		if (ipc_subscribed(cli, 1))
 			ipc_server_notify(cli, 1, 666, "welcome2", sizeof("welcome2"));
-		return 0;
+		break;
 	default:
 		return -1;
 	}
+	return 0;
 }
 #define test_seq1	"if the server as broker, server can call this function to notify a client"
 
@@ -95,7 +98,7 @@ int sig_proxy_init()
 		return -1;
 	sig_pipe = pipe[1];
 	signal(SIGALRM, signal_handler);
-	alarm(1);
+	//alarm(1);
 	printf("event proxy init success. \n");
 	return pipe[0];
 }
@@ -132,15 +135,43 @@ static int _time()
 
 int test_entry_for_ipc(int argc, char **argv)
 {
+#if 0
+	int p[2];
+	pipe(p);
+
+	if (fork() == 0) {
+		prctl(PR_SET_NAME , "mcd-forker");
+		close(p[1]);
+		fcntl(p[0], F_SETFD, FD_CLOEXEC);
+		for (;;) {
+			int ret = 0;
+			char buf[256] = {0};
+			do {
+				ret = read(p[0], buf, sizeof(buf));
+				printf("buf:%s\n", buf);
+			} while (ret < 0 && errno == EINTR);
+			if (ret > 0) {
+				buf[ret] = '\0';
+				system(buf);
+			}
+		}
+	}
+	close(p[0]);
+	
+	printf("1./xxxxx file : %d\n", access("./xxxxx", F_OK) == 0);
+	FILE *fp = fopen("./xxxxx", "a+");
+	printf("2./xxxxx file : %d\n", access("./xxxxx", F_OK) == 0);
+#endif
 	_time();
 
-	sleep(5);
+	//sleep(5);
 
-	_time();
+	//_time();
 
 	char buf[1024] = {0};
 	unsigned long mask;
 	if (!strcmp(argv[0], "server")) {
+	#if 0
 		pid_t pid = fork();
 
 		if (pid == 0) {
@@ -154,24 +185,33 @@ int test_entry_for_ipc(int argc, char **argv)
 				exit(-1);
 			}
 		}
+	#endif
 		signal(SIGCHLD, SIG_IGN);
 		pthread_t task_pid;
-		struct ipc_timing test_timing = ipc_timing_initializer(test_timing, 0, 2,0,NULL,timing_handler);
-		struct ipc_timing test_timing1 = ipc_timing_initializer(test_timing1, 1, 3,0,NULL,timing_handler1);
+		//struct ipc_timing test_timing = ipc_timing_initializer(test_timing, 0, 2,0,NULL,timing_handler);
+		//struct ipc_timing test_timing1 = ipc_timing_initializer(test_timing1, 1, 3,0,NULL,timing_handler1);
 		struct ipc_timing test_timing2 = ipc_timing_initializer(test_timing2, 1, 5,0,NULL,timing_handler2);
 		if (ipc_server_init(IPC_SERVER_TEST, ipcServerHandler) < 0)
 		{
 			printf("server init error\n");
 			exit(-1);
 		}
+		unsigned int bz = 1000;
 		ipc_server_setopt(IPC_SEROPT_SET_MANAGER, ipcClientManager);
-	
+		ipc_server_setopt(IPC_SEROPT_SET_BUF_SIZE, &bz);
 		pthread_create(&task_pid, NULL, monitor_task, NULL);
 		int fd = sig_proxy_init();
 		ipc_server_proxy(fd, sig_proxy_handler, NULL);
-		ipc_timing_register(&test_timing);
-		ipc_timing_register(&test_timing1);
-		ipc_timing_register(&test_timing2);
+		//ipc_timing_register(&test_timing);
+		//ipc_timing_register(&test_timing1);
+		//ipc_timing_register(&test_timing2);
+#if 0
+		system("./a.out 1&");
+		//system("./a.out 2&");
+		//write(p[1], "./a.out 2&", strlen("./a.out 2&"));
+		if (send(p[1], "./a.out 3&", strlen("./a.out 2&"), MSG_DONTWAIT | MSG_NOSIGNAL) < 0)
+			printf("send error:%d\n", errno);
+#endif
 		printf("Run ---- \n");
 		g_start = time(NULL);
 		if (ipc_server_run() < 0) {
@@ -200,8 +240,8 @@ int test_entry_for_ipc(int argc, char **argv)
 			client = ipc_client_create(s);
 			if (client) {
 				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq1, sizeof(test_seq1), 3);
-				//ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq2, sizeof(test_seq2), 3);
-				//ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq3, sizeof(test_seq3), 3);
+				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq2, sizeof(test_seq2), 3);
+				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq3, sizeof(test_seq3), 3);
 				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq4, sizeof(test_seq4), 3);
 				buf[0] = '\0';
 				client_sendto_server(client, 0x102, "---->Hard", sizeof("---->Hard"), buf, sizeof(buf));

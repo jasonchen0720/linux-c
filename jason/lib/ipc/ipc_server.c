@@ -682,8 +682,8 @@ static int ipc_handler_invoke(struct ipc_core *core, struct ipc_server *s, struc
 	switch (s->clazz) {
 	case IPC_CLASS_DUMMY:
 		break;
-	case IPC_CLASS_CONNECTOR:
-		msg->flags |= __bit(IPC_BIT_CONNECTOR);
+	case IPC_CLASS_REQUESTER:
+		msg->flags |= __bit(IPC_BIT_REQUESTER);
 		break;
 	case IPC_CLASS_SUBSCRIBER:
 		msg->flags |= __bit(IPC_BIT_SUBSCRIBER);
@@ -751,7 +751,7 @@ static void ipc_release(struct ipc_core *core, struct ipc_server *sevr)
 	case IPC_CLASS_DUMMY:
 		assert(0);
 		break;
-	case IPC_CLASS_CONNECTOR:
+	case IPC_CLASS_REQUESTER:
 		ipc_server_manager(core, sevr, IPC_CLIENT_RELEASE, NULL);
 		if (sevr->cookie) {
 			if (ipc_cookie_type(sevr->cookie) == IPC_COOKIE_ASYNC)
@@ -827,12 +827,12 @@ static struct ipc_server * ipc_server_create(struct ipc_core *core,
 	return sevr;
 }
 /**
- * ipc_broker_sync - handler for the syn message from client's callback
+ * ipc_server_sync - handler for the syn message from client's callback
  * @core: ipc core of server.
  * @sevr: ipc handle.
  * @msg: synchronize message.
  */
-static int ipc_broker_sync(struct ipc_core *core,
+static int ipc_server_sync(struct ipc_core *core,
 								struct ipc_server *sevr,
 								struct ipc_msg *msg)
 {
@@ -850,12 +850,12 @@ static int ipc_broker_sync(struct ipc_core *core,
 	return 0;
 }
 /**
- * ipc_broker_unreg - handler for the callback unregister message from client
+ * ipc_server_unregister - handler for the callback unregister message from client
  * @core: ipc core of server
  * @sevr: ipc handle
  * @msg: unregister message
  */
-static int ipc_broker_unreg(struct ipc_core *core, struct ipc_server *sevr, struct ipc_msg *msg)
+static int ipc_server_unregister(struct ipc_core *core, struct ipc_server *sevr, struct ipc_msg *msg)
 {
 	if (sevr->clazz != IPC_CLASS_SUBSCRIBER)
 		return -1;
@@ -942,11 +942,11 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 			case IPC_SDK_MSG_REGISTER:
 				goto __error;	/* This kind of msg is not allowed for this ipc handle */
 			case IPC_SDK_MSG_SYNC:
-				if (ipc_broker_sync(core, ipc, msg) < 0)
+				if (ipc_server_sync(core, ipc, msg) < 0)
 					goto __error;
 				break;
 			case IPC_SDK_MSG_UNREGISTER:
-				if (ipc_broker_unreg(core, ipc, msg) < 0)
+				if (ipc_server_unregister(core, ipc, msg) < 0)
 					goto __error;
 				break;
 			case IPC_SDK_MSG_NOTIFY:
@@ -965,17 +965,21 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 		IPC_LOGW("client %d:%d:%s shutdown sk:%d", ipc->clazz, ipc->identity, peer_name(ipc), ipc->sock);
 		if (ipc->clazz == IPC_CLASS_SUBSCRIBER)
 			ipc_server_manager(core, ipc, IPC_CLIENT_SHUTDOWN, NULL);
-		goto __error;
-	} 
-	/* recv calling errors */
-	if (errno == EINTR)
-		goto __recv;
-	
-	IPC_LOGE("error: recv length: %d, errno: %d", len, errno);
-#if 0
-	if (errno == EAGAIN || errno == EWOULDBLOCK)
-		return 0;
-#endif
+	} else {
+		/* recv calling errors */
+		if (errno == EINTR)
+			goto __recv;
+		IPC_LOGE("error: recv length: %d, errno: %d", len, errno);
+	#if 0
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return 0;
+	#endif
+		if (errno == ECONNRESET)
+			IPC_LOGE("client %d:%d:%s crash sk:%d", ipc->clazz, ipc->identity, peer_name(ipc), ipc->sock);
+			
+		if (ipc->clazz == IPC_CLASS_SUBSCRIBER)
+			ipc_server_manager(core, ipc, IPC_CLIENT_SHUTDOWN, NULL);
+	}
   __error:
 	ipc_release(core, ipc);
 	return -1;
@@ -1047,12 +1051,12 @@ err:
 	return NULL;
 }
 /**
- * ipc_broker_register - handler for the callback register message from client
+ * ipc_server_register - handler for the callback register message from client
  * @core: ipc core of server
  * @sock: socket fd
  * @msg: callback register message
  */
-static int ipc_broker_register(struct ipc_core *core, int sock, struct ipc_msg * msg)
+static int ipc_server_register(struct ipc_core *core, int sock, struct ipc_msg * msg)
 {
 	struct ipc_peer *peer;
 	struct ipc_reg *reg = (struct ipc_reg *)msg->data;
@@ -1071,7 +1075,7 @@ static int ipc_broker_register(struct ipc_core *core, int sock, struct ipc_msg *
 	if (ipc_server_manager(core, &peer->sevr, IPC_CLIENT_REGISTER, reg->data) < 0) {
 		msg->data_len = 0;
 		send_msg(sock, msg);
-		IPC_LOGE("Manager refused.");
+		IPC_LOGW("Manager refused.");
 		goto __error;
 	}
 	IPC_LOGI("%d register, client %d:%s, sk: %d, mask: %04lx",
@@ -1085,8 +1089,13 @@ static int ipc_broker_register(struct ipc_core *core, int sock, struct ipc_msg *
 	neg->buf_size = core->buf->size;
 	msg->msg_id = IPC_SDK_MSG_SUCCESS;
 	msg->data_len = sizeof(struct ipc_negotiation);
-	if (send_msg(sock, msg) > 0)
-		return 0;
+	if (send_msg(sock, msg) < 0) {
+		/* Client probably just exited or crashed. */
+		IPC_LOGE("Send SDK success error.");
+		ipc_server_manager(core, &peer->sevr, IPC_CLIENT_SHUTDOWN, NULL);
+		goto __error;
+	}
+	return 0;
 __error:
 	ipc_release(core, &peer->sevr);
 	return -1;
@@ -1097,32 +1106,34 @@ __fatal:
 	return -1;
 }
 /**
- * ipc_server_register - handler for the channel register message from client
+ * ipc_server_connect - handler for the client connecting message from client
  * @core: ipc core of server
  * @sock: socket fd
  * @msg: channel register message
  */
-static int ipc_server_register(struct ipc_core *core, int sock, struct ipc_msg * msg)
+static int ipc_server_connect(struct ipc_core *core, int sock, struct ipc_msg * msg)
 {
 	struct ipc_server *sevr;
 	struct ipc_identity *cid = (struct ipc_identity *)msg->data;
-	sevr = ipc_server_create(core, IPC_CLASS_CONNECTOR, cid->identity, sock, ipc_common_socket_handler);
+	sevr = ipc_server_create(core, IPC_CLASS_REQUESTER, cid->identity, sock, ipc_common_socket_handler);
 	if (!sevr) {
 		send_msg(sock, msg);
 		close(sock);
 		return -1;
 	}
-	if (ipc_server_manager(core, sevr, IPC_CLIENT_REGISTER, NULL) < 0) {
+	if (ipc_server_manager(core, sevr, IPC_CLIENT_CONNECT, NULL) < 0) {
 		send_msg(sock, msg);
+		IPC_LOGW("Manager refused.");
 		goto err;
 	}
-	IPC_LOGI("%d:%s register sevr:sk:%d", sevr->identity, peer_name(sevr), sevr->sock);
+	IPC_LOGI("%d:%s connecting sevr:sk:%d", sevr->identity, peer_name(sevr), sevr->sock);
 	msg->msg_id = IPC_SDK_MSG_SUCCESS;
 	msg->data_len = 0;
 	
-	if (send_msg(sock, msg) < 0)
+	if (send_msg(sock, msg) < 0) {
+		IPC_LOGE("Send SDK success error.");
 		goto err;
-
+	}
 	return 0;
 err:
 	ipc_release(core, sevr);
@@ -1150,9 +1161,9 @@ static int ipc_master_socket_handler(struct ipc_core *core, struct ipc_server *i
 		struct ipc_msg *msg = (struct ipc_msg *)buffer;
 		switch (msg->msg_id){
 		case IPC_SDK_MSG_CONNECT:
-			return ipc_server_register(core, sock, msg);
+			return ipc_server_connect(core, sock, msg);
 		case IPC_SDK_MSG_REGISTER:
-			return ipc_broker_register(core, sock, msg);
+			return ipc_server_register(core, sock, msg);
 		case IPC_SDK_MSG_SYNC:
 			goto __error;	/* This kind of msg is not allowed for this ipc handle */
 		case IPC_SDK_MSG_UNREGISTER:
@@ -1534,10 +1545,12 @@ int ipc_server_exit()
 		free((void *)core->path);
 		core->path = NULL;
 	}
+#if 0
 	if (core->server) {
 		free((void *)core->server);
 		core->server = NULL;
 	}
+#endif
 	if (core->node_hb) {
 		free(core->node_hb);
 		core->node_hb = NULL;
@@ -1721,7 +1734,7 @@ int ipc_server_proxy(int fd, int (*handler)(int, void *), void *arg)
 	struct ipc_core *core = current_core();
 	if (!ipc_core_inited(core))
 		return -1;
-	if (fd <= 0)
+	if (fd < 0)
 		return -1;
 	if (!handler)
 		return -1;
@@ -1770,7 +1783,7 @@ int ipc_server_setopt(int opt, void *arg)
  */
 int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie)
 {
-	if (sevr->clazz != IPC_CLASS_CONNECTOR &&
+	if (sevr->clazz != IPC_CLASS_REQUESTER &&
 		sevr->clazz != IPC_CLASS_SUBSCRIBER)
 		return -1;
 	

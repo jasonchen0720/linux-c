@@ -229,7 +229,7 @@ static int ipc_client_connect(struct ipc_client *client)
 	struct ipc_identity *cid = (struct ipc_identity *)ipc_msg->data;
 	cid->identity = client->identity;
 	ipc_msg->data_len = sizeof(struct ipc_identity);
-	if (IPC_REQUEST_SUCCESS != ipc_request(client, ipc_msg, sizeof(buffer), 1))
+	if (IPC_REQUEST_SUCCESS != ipc_request(client, ipc_msg, sizeof(buffer), IPC_MSG_SDK_TIMEOUT))
 		goto __error;
 	
 	if (ipc_msg->msg_id != IPC_SDK_MSG_SUCCESS)
@@ -497,7 +497,7 @@ static int ipc_subscriber_connect(struct ipc_subscriber *subscriber)
 		memcpy(reg->data, subscriber->data, subscriber->data_len);
 	ipc_msg->data_len = size;
 
-	if (IPC_REQUEST_SUCCESS != ipc_request(&subscriber->client, ipc_msg, sbuf, 1))
+	if (IPC_REQUEST_SUCCESS != ipc_request(&subscriber->client, ipc_msg, sbuf, IPC_MSG_SDK_TIMEOUT))
 		goto __error;
 	
 	if (ipc_msg->msg_id != IPC_SDK_MSG_SUCCESS)
