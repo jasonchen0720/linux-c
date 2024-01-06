@@ -35,63 +35,117 @@ static struct logger_struct __logger = {
 static int __lock = LOCK_INVALID;
 #define LOGGER() 	(&__logger)
 #if 0
-#define __lock_cas(old_val, new_val) ({int __b = __lock == (old_val); if (__b) __lock = (new_val); __b; })
+#define lock_cas(old_val, new_val) ({int __b = __lock == (old_val); if (__b) __lock = (new_val); __b; })
 #else
-#define __lock_cas(old_val, new_val) (__sync_bool_compare_and_swap((&__lock), (old_val), (new_val)))
+#define lock_cas(old_val, new_val) (__sync_bool_compare_and_swap((&__lock), (old_val), (new_val)))
 #endif
-static void __lock_log(const char *info, int nerr)
+
+/*
+ * log_format() -
+ * Internal calling, 
+ * caller should guarantee that the size of buffer @buf is enough(size > 25 bytes).
+ */
+static int log_format(char buf[LOG_LINE_MAX], const char *format, va_list ap)
 {
-	FILE *fp = fopen(LOG_PATH"/samlog.lk", "a+");
-	if (fp == NULL) {
-		printf("lock_log open:failed.\n");
+	int offs = 0;
+	struct tm tm;
+	time_t now = time(NULL);
+	if (localtime_r(&now, &tm))
+		offs = strftime(buf, 32, "%c ", &tm);
+	else
+		offs = snprintf(buf, 32, "%s ", "");
+	
+	offs += vsnprintf(buf + offs, LOG_LINE_MAX - offs, format, ap);
+	if (offs >= LOG_LINE_MAX) {
+		offs  = LOG_LINE_MAX;
+		buf[offs - 1] = '\n';
+	}
+	return offs;
+}
+
+static const char * log_pname(char name[17])
+{
+	int fd = open("/proc/self/comm", O_RDONLY);
+	if (fd < 0)
+		goto err;
+	int size = read(fd, name, 16);
+	if (size <= 0) {
+		close(fd);
+		goto err;
+	}
+	close(fd);
+	if (name[size - 1] == '\n')
+		name[size - 1] = '\0';
+	else
+		name[size] = '\0';
+	return (const char *)name;
+err:
+	sprintf(name, "%d", gettid());
+	return (const char *)name; 
+}
+
+static void log_debug(const char *format, ...)
+{
+	FILE *io = fopen(LOG_PATH"/samlog.lk", "a+");
+	if (!io) {
+		printf("samlog.log IO error.\n");
 		return;
 	}
-	if (ftell(fp) < 64 * 1024) {
-		char buf[64];
-		if (info) {
-			char err[32] = {0};
-			if (nerr) sprintf(err, " errno:%d", nerr);
-			snprintf(buf, sizeof(buf), "%d lock: %s%s\n",  gettid(), info, err);
-		} else 
-			snprintf(buf, sizeof(buf), "%d lock: %d\n",  gettid(), __lock);
-		fwrite(buf, strlen(buf), 1, fp);
+	if (ftell(io) < 64 * 1024) {
+		va_list ap;
+		va_start(ap, format);
+		char buf[LOG_LINE_MAX];
+		int size = log_format(buf, format, ap);
+		fwrite(buf, size, 1, io);
+		fflush(io);
+		va_end(ap);
 	}
-	fclose(fp);
+	fclose(io);
 }
-static int __lock_init()
+#define LOG(format,...) log_debug("tid:%d "format"\n", gettid(), ##__VA_ARGS__)
+static int lock_init()
 {
-	int doing = !__lock_cas(LOCK_INVALID, LOCK_INITING);
+	char comm[17];
+	/* Process name which is trying to hold lock. */
+	log_pname(comm);
+
+	/* Thread-safe protection, set the lock status as initializing(LOCK_INITING) atomically. */
+	int doing = !lock_cas(LOCK_INVALID, LOCK_INITING);
 	if (doing) {
-		__lock_log("init", EINPROGRESS);
+		LOG("%s init:%d", comm, EINPROGRESS);
 		return -1;
 	}
 	int sem = -1;
     key_t key = ftok(LOG_PATH, 0x80);
     if (key == -1) {
-		__lock_log("ftok", errno);
+		LOG("%s ftok:%d", comm, errno);
         goto out;
     }
     sem = semget(key, 1, IPC_CREAT | IPC_EXCL | 0666);
     if (sem == -1) {
-		if (errno == EEXIST)
+		if (errno == EEXIST) {
 			sem = semget(key, 1, 0666);
-		else __lock_log("semget", errno);
+			LOG("%s key:0x%x sem:%d", comm, key, sem);
+		} else 
+			LOG("%s semget:%d", comm, errno);
 		goto out;
     }
 	union semun arg = {.val = 1};
 	if (semctl(sem, 0, SETVAL, arg) == -1) {
-		__lock_log("semctl", errno);
+		LOG("%s semctl:%d", comm, errno);
 	    sem = -1;
-	}
+	} else
+		LOG("%s key:0x%x sem:%d", comm, key, sem);
 out:
-	__lock_cas(LOCK_INITING, sem);
-	__lock_log(NULL, 0);
+	lock_cas(LOCK_INITING, sem);
+	LOG("%s lock:%d", comm, __lock);
     return sem;
 }
-static int __log_lock() 
+
+static int log_lock() 
 {
 	if (__lock < 0) {
-		if (__lock_init() == -1)
+		if (lock_init() == -1)
 			return -1;
 	}
 	struct sembuf sop[1];
@@ -118,7 +172,7 @@ static int __log_lock()
 	return ret;
 }
 
-static int __log_unlock() 
+static int log_unlock() 
 {
 	if (__lock < 0)
 		return -1;
@@ -136,31 +190,11 @@ static int __log_unlock()
 	
 	return ret;
 }
-/*
- * log_time_format() -
- * Internal calling, 
- * caller should guarantee that the size of buffer @time_info is enough(size > 25 bytes).
- */
-static int __log_format(char buf[LOG_LINE_MAX], const char *format, va_list ap)
+static void log_backup(int fd, int file_bakup, const char *file_path)
 {
-	int offs = 0;
-	struct tm tm;
-	time_t now = time(NULL);
-	if (localtime_r(&now, &tm))
-		offs = strftime(buf, 32, "%c ", &tm);
-	else
-		offs = snprintf(buf, 32, "%s ", "");
+	if (log_lock() == -1)
+		return;
 	
-	offs += vsnprintf(buf + offs, LOG_LINE_MAX - offs, format, ap);
-	if (offs >= LOG_LINE_MAX) {
-		offs  = LOG_LINE_MAX;
-		buf[offs - 1] = '\n';
-	}
-	return offs;
-}
-static void __log_backup(int fd, int file_bakup, const char *file_path)
-{
-	__log_lock();
 	char s[32];
 	char file[2][PATH_MAX + 1] = {0};
 	
@@ -186,7 +220,7 @@ static void __log_backup(int fd, int file_bakup, const char *file_path)
 	}
 	rename(file_path, file[n]);
 out:
-	__log_unlock();
+	log_unlock();
 }
 
 /*
@@ -197,7 +231,7 @@ out:
 static void generic_print(const char *format, va_list ap)
 {
 	char buf[LOG_LINE_MAX];
-	__log_format(buf, format, ap);
+	log_format(buf, format, ap);
 	printf("%s", buf);
 }
 static void generic_log_print(const char *format, va_list ap)
@@ -209,13 +243,13 @@ static void generic_log_print(const char *format, va_list ap)
 		return;
 	}
 	char buf[LOG_LINE_MAX];
-	int size = __log_format(buf, format, ap);
+	int size = log_format(buf, format, ap);
 	fwrite(buf, size, 1, io);
 	fflush(io);
 	
 	if (ftell(io) > logger->file_size) {
 		if (logger->file_bakup > 0)
-			__log_backup(fileno(io), logger->file_bakup, logger->file_path);
+			log_backup(fileno(io), logger->file_bakup, logger->file_path);
 		else
 			ftruncate(fileno(io), 0);
 	}
@@ -248,28 +282,25 @@ void GENERIC_LOG(const char *format, ...)
 		generic_print(format, ap);
 	va_end(ap);
 }
-static void simple_log_print(const char *file_path, int file_size, const char *format, va_list ap)
+
+void SIMPLE_LOG(const char *file_path, int file_size, const char *format, ...)
 {
 	FILE *io = fopen(file_path, "a+");
 	if (!io) {
 		printf("Logger IO error.\n");
 		return;
 	}
+	va_list ap;
+	va_start(ap, format);
 	char buf[LOG_LINE_MAX];
-	int size = __log_format(buf, format, ap);
+	int size = log_format(buf, format, ap);
 	fwrite(buf, size, 1, io);
 	fflush(io);
 
 	if (ftell(io) > file_size) {
-		__log_backup(fileno(io), 1, file_path);
+		log_backup(fileno(io), 1, file_path);
 	}
 	fclose(io);
-}
-void SIMPLE_LOG(const char *file_path, int file_size, const char *format, ...)
-{
-	va_list ap;
-	va_start(ap, format);
-	simple_log_print(file_path, file_size, format, ap);
 	va_end(ap);
 }
 
