@@ -40,52 +40,76 @@ union semun {
 	                                (Linux specific) */
 };
 #define lock_compare_and_swap(old_val, new_val)	ATOMIC_BCS(&lock, old_val, new_val)
-static void lock_log(const char *info, int nerr)
+
+static int log_format(char buf[IPC_LOG_LINE], const char *format, va_list ap)
+{
+	int offs = 0;
+	struct tm tm;
+	time_t now_time;
+	now_time = time(NULL);
+	if (localtime_r(&now_time, &tm))
+		offs = strftime(buf, 32, "%b %d %H:%M:%S ", &tm);
+	else
+		offs = snprintf(buf, 32, "%s ", "");
+
+	offs += vsnprintf(buf + offs, IPC_LOG_LINE - offs, format, ap);
+	if (offs >= IPC_LOG_LINE) {
+		offs  = IPC_LOG_LINE;
+		buf[offs - 1] = '\n';
+	}
+	return offs;
+}
+
+static void log_output(const char *format, ...)
 {
 	FILE *fp = fopen(IPC_LOG_PATH"/ipclog.lk", "a+");
 	if (fp == NULL)
 		return;
 	
 	if (ftell(fp) < IPC_LOG_SIZE) {
-		char buf[64];
-		if (info) {
-			char err[32] = {0};
-			if (nerr) sprintf(err, " errno:%d", nerr);
-			snprintf(buf, sizeof(buf), "%d lock: %s%s\n",  gettid(), info, err);
-		} else 
-			snprintf(buf, sizeof(buf), "%d lock: %d\n",  gettid(), lock);
-		fwrite(buf, strlen(buf), 1, fp);
+		va_list ap;
+		va_start(ap, format);
+		char buf[IPC_LOG_LINE];
+		int size = log_format(buf, format, ap);
+		fwrite(buf, size, 1, fp);
+		fflush(fp);
+		va_end(ap);
 	}
 	fclose(fp);
 }
+#define LOG(format,...) log_output("%s(%d) "format"\n", self_name(), gettid(), ##__VA_ARGS__)
+
 int lock_init()
 {
 	int doing = !lock_compare_and_swap(IPC_LOCK_INVALID, IPC_LOCK_INITING);
 	if (doing) {
-		lock_log("init", EINPROGRESS);
+		LOG("init:%d", EINPROGRESS);
 		return -1;
 	}
 	int sem = -1;
     key_t key = ftok(IPC_LOG_PATH, 0x96);
     if (key == -1) {
-		lock_log("ftok", errno);
+		LOG("ftok:%d", errno);
         goto out;
     }
     sem = semget(key, 1, IPC_CREAT | IPC_EXCL | 0666);
     if (sem == -1) {
-		if (errno == EEXIST)
+		if (errno == EEXIST) {
 			sem = semget(key, 1, 0666);
-		else lock_log("semget", errno);
+			LOG("key:0x%x sem:%d", key, sem);
+		} else 
+			LOG("semget:%d", errno);
 		goto out;
     }
 	union semun arg = {.val = 1};
 	if (semctl(sem, 0, SETVAL, arg) == -1) {
-		lock_log("semctl", errno);
+		LOG("semctl:%d", errno);
 	    sem = -1;
-	}
+	} else
+		LOG("key:0x%x sem:%d", key, sem);
 out:
 	lock_compare_and_swap(IPC_LOCK_INITING, sem);
-	lock_log(NULL, 0);
+	LOG("lock:%d", lock);
     return sem;
 }
 
@@ -139,7 +163,8 @@ static int lock_relase()
 }
 static void log_backup(int fd)
 {
-	lock_hold();
+	if (lock_hold() == -1)
+		return;
 	const char *log_file = IPC_LOG_FILE;
 	char s[32];
 	char file[2][PATH_MAX + 1] = {0};
@@ -168,24 +193,7 @@ static void log_backup(int fd)
 out:
 	lock_relase();
 }
-static int log_format(char buf[IPC_LOG_LINE], const char *format, va_list ap)
-{
-	int offs = 0;
-	struct tm tm;
-	time_t now_time;
-	now_time = time(NULL);
-	if (localtime_r(&now_time, &tm))
-		offs = strftime(buf, 32, "%b %d %H:%M:%S ", &tm);
-	else
-		offs = snprintf(buf, 32, "%s ", "");
 
-	offs += vsnprintf(buf + offs, IPC_LOG_LINE - offs, format, ap);
-	if (offs >= IPC_LOG_LINE) {
-		offs  = IPC_LOG_LINE;
-		buf[offs - 1] = '\n';
-	}
-	return offs;
-}
 static void log_print(const char *format, va_list ap)
 {
 	FILE *fp = fopen(IPC_LOG_FILE, "a+");

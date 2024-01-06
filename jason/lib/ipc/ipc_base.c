@@ -7,7 +7,7 @@
  *				  - Optimize ipc_async_execute():
  *					Add arg @size for allocating specific length of ipc_msg for ipc_async.
  *				  - Modify log tag, using comm instead.
- * Version 1.1.0. modified at 2020/05/20
+ * Version 1.1.0. Modified at 2020/05/20
  * Author: Jie Chen <jasonchen0720@163.com>
  * Brief : IPC internal definitions
  * Date  : Created at 2020/05/20
@@ -188,7 +188,7 @@ int recv_msg(int sock,  char *buf, unsigned int size, int tmo)
 	if (!size)
 		return IPC_RECEIVE_EVAL;
 retry:
-	len = select(sock + 1, &rfds, NULL, NULL, &timeout);
+	len = select(sock + 1, &rfds, NULL, NULL, tmo < 0 ? NULL : &timeout);
 
 	if (len == 0) {
 		IPC_LOGE("Select timedout with %d secs.", tmo);

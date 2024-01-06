@@ -18,7 +18,7 @@
  *                     With IPC async, server has the ability to response to client asynchronously.
  * 					2. Add data option(registering information) for subscriber registering - ipc_broker_register().
  *					3. Add option for ipc_client_manager() - IPC_CLIENT_UNREGISTER, IPC_CLIENT_SHUTDOWN.
- *					4. Modify ipc_server_manager(), supporting to manage client class: IPC_CLASS_CONNECTOR.
+ *					4. Modify ipc_server_manager(), supporting to manage client class: IPC_CLASS_REQUESTER.
  *			      - Optimizations: 
  *				    1. Add @arg and @cookie passed as the sole argument of handler().
  *				    2. Simplify ipc mutex option, Remove struct ipc_mutex, using __ipc_mutex internal instead.
@@ -1451,17 +1451,11 @@ static int ipc_loop(struct ipc_core *core)
 int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *, void *))
 {
 	char *path = NULL;
-	char *serv = NULL;
 	if (!server || !handler)
 		return -1;
 	path = (char *)malloc(sizeof(UNIX_SOCK_DIR) + strlen(server));
 	if (!path)
 		return -1;
-	serv = strdup(server);
-	if (!serv) {
-		free(path);
-		return -1;
-	}
 	struct ipc_core *core = current_core();
 	sprintf(path, "%s%s", UNIX_SOCK_DIR, server);
 	init_list_head(&core->head);
@@ -1478,22 +1472,33 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 	core->server  = self_name();
 #if IPC_EPOLL
 	core->epfd = epoll_create(1024);
+	if (core->epfd < 0) {
+		goto err;
+	}
+	if (fcntl(core->epfd, F_SETFD, FD_CLOEXEC) < 0) {
+		close(core->epfd);
+		goto err;
+	}
 #elif IPC_PERF
 	core->nfds	  = 0;
 	FD_ZERO(&core->rfds);
 #endif
 	if (ipc_master_init(core) < 0) {
-		core->path 	  = NULL;
-		core->path 	  = NULL;
-		free(path);
-		free(serv);
-		return -1;
+#if IPC_EPOLL
+		close(core->epfd);
+#endif
+		goto err;
 	}
-	core->dummy	  = &__ipc_dummy;
-	core->tid     = gettid();
+	core->dummy	 = &__ipc_dummy;
+	core->tid 	 = gettid();
 	core->flags |= IPC_CORE_F_INITED;
-	
+	IPC_LOGI("%s init done.", server);
 	return 0;
+err:
+	core->path 	  = NULL;
+	core->server  = NULL;
+	free(path);
+	return -1;
 }
 /**
  * ipc_server_run - after init ipc core successfully, call this to run ipc core
@@ -1565,6 +1570,9 @@ int ipc_server_exit()
 	}
 	core->flags &= ~IPC_CORE_F_INITED;
 	ipc_mutex_unlock(core->mutex);
+#if IPC_EPOLL
+	close(core->epfd);
+#endif
 	if (core->pool)
 		ipc_async_exit(core->pool);
 	
