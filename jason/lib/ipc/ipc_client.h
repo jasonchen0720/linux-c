@@ -38,7 +38,7 @@ struct ipc_client* ipc_client_create(const char *server);
 void ipc_client_close(struct ipc_client* client);
 void ipc_client_destroy(struct ipc_client* client);
 int ipc_client_repair(struct ipc_client *client);
-int ipc_client_publish(struct ipc_client *client, int to, unsigned long topic, int msg_id, void *data, int size, int tmo);
+int ipc_client_publish(struct ipc_client *client, int to, unsigned long topic, int msg_id, const void *data, int size, int tmo);
 struct ipc_subscriber *ipc_subscriber_register(const char *broker, 
 										unsigned long mask, const void *data, unsigned int size,
 										ipc_subscriber_handler handler, void *arg);

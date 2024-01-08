@@ -108,7 +108,7 @@ int lock_init()
 	} else
 		LOG("key:0x%x sem:%d", key, sem);
 out:
-	lock_compare_and_swap(IPC_LOCK_INITING, sem);
+	(void)lock_compare_and_swap(IPC_LOCK_INITING, sem);
 	LOG("lock:%d", lock);
     return sem;
 }
@@ -167,7 +167,7 @@ static void log_backup(int fd)
 		return;
 	const char *log_file = IPC_LOG_FILE;
 	char s[32];
-	char file[2][PATH_MAX + 1] = {0};
+	char file[2][PATH_MAX + 1] = {{0}, {0}};
 	
 	sprintf(s, "/proc/self/fd/%d", fd);
 	/* File may by renamed by other process, get its link first */
@@ -210,7 +210,6 @@ static void log_print(const char *format, va_list ap)
 }
 static void log_debug(const char *format, va_list ap)
 {
-	char time[32];
 	char buf[IPC_LOG_LINE];
 	log_format(buf, format, ap);
 	printf("%s", buf);

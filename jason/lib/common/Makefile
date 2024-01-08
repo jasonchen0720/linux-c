@@ -16,10 +16,14 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
+-I$(JASON_WORK_DIR)/include \
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./logger.c
+./logger.c \
+./generic_bit.c \
+./generic_file.c \
+./generic_proc.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'

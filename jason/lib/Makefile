@@ -2,6 +2,7 @@ include $(JASON_WORK_DIR)/config.mk
 
 all clean:
 	$(MAKE) -C ./common  $@
+	$(MAKE) -C ./cfg  $@
 ifeq ($(CONFIG_IPC),y)
 	$(MAKE) -C ./ipc  $@
 endif

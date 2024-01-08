@@ -1,60 +1,47 @@
-include $(JASON_WORK_DIR)/config.mk
 include $(JASON_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-#EXECUTABLES :=
+EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS :=
+STATIC_LIBS := libcfg.a
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS := libjason.so
+SHARED_LIBS :=
 
 SRCS :=
 
-CFLAGS += 
+CFLAGS +=
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
 -I$(JASON_WORK_DIR)/include \
+-I$(JASON_WORK_DIR)/lib/tree
 
-ifeq ($(CONFIG_IPC),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc/
-endif
-ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/tree/
-endif
 # All of the sources participating in the build are defined here
-
-include client/subdir.mk
-
-#%.o: ./%.c
-#	@echo 'Building file: $<'
-#	$(CC) $(CFLAGS) $(IFLAGS) -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
-#	@echo 'Finished building: $<'
-#	@echo ' '
+include subdir.mk
 
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=$(JASON_WORK_DIR)/lib/ipc/libipc.a $(JASON_WORK_DIR)/lib/tree/libtree.a $(JASON_WORK_DIR)/lib/common/libbase.a
+USER_OBJS :=
 
 LIBS :=
 
-SHARE_LIBS := -lpthread
+SHARE_LIBS :=
 
 SHARE_LDFLAGS :=
 
 # All Target
-all: $(STATIC_LIBS) $(SHARED_LIBS)
+all: $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
 
 # Tool invocations
-#$(EXECUTABLES): $(OBJS) $(USER_OBJS)
-#	@echo 'Building target: $@'
-#	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
-#	@echo 'Finished building target: $@'
-#	@echo ' '
+$(EXECUTABLES): $(OBJS) $(USER_OBJS)
+	@echo 'Building target: $@'
+	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
+	@echo 'Finished building target: $@'
+	@echo ' '
 
 # Tool invocations
 $(STATIC_LIBS): $(OBJS) $(USER_OBJS)

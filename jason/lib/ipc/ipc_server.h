@@ -130,8 +130,8 @@ enum IPC_SERVER_OPTION
 int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *, void *));
 int ipc_server_run();
 int ipc_server_exit();
-int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int size);
-int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int msg_id, void *data, int size);
+int ipc_server_publish(int to, unsigned long topic, int msg_id, const void *data, int size);
+int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int msg_id, const void *data, int size);
 int ipc_server_setopt(int opt, void *arg);
 int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg);
 /*

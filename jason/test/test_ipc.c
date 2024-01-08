@@ -13,22 +13,24 @@
 #include <limits.h>
 #include "ipc_client.h"
 #include "ipc_server.h"
-#include "client.h"
+#include "ipcc.h"
+#include "broker_define.h"
+#define IPC_TEST			"IPC_TEST"
 static int sig_pipe = 0;
 static time_t g_start;
-static int indication_msg_callback(int msg_id, void *data, int size, void *arg)
+static int test_ipc_callback(int msg_id, void *data, int size, void *arg)
 {
 	printf("--->ind msg coming : %04d: %s\n", msg_id, (char *)data);
 	return 0;
 }
-static int ipcServerHandler(struct ipc_msg* msg, void *arg, void *cookie)
+static int test_ipc_handler(struct ipc_msg* msg, void *arg, void *cookie)
 {
 	printf("ipc_msg->msg_id[%04x], data:%s\n", msg->msg_id, msg->data);
 	msg->data_len = sprintf(msg->data, "%s", "<-------------reply");
 	msg->data_len++;
 	return 0;
 }
-static int ipcClientManager( struct ipc_server *cli, int cmd, void *data, void *arg, void *cookie)
+static int test_ipc_manager( struct ipc_server *cli, int cmd, void *data, void *arg, void *cookie)
 {
 	switch (cmd) {
 	case IPC_CLIENT_RELEASE:
@@ -191,13 +193,13 @@ int test_entry_for_ipc(int argc, char **argv)
 		//struct ipc_timing test_timing = ipc_timing_initializer(test_timing, 0, 2,0,NULL,timing_handler);
 		//struct ipc_timing test_timing1 = ipc_timing_initializer(test_timing1, 1, 3,0,NULL,timing_handler1);
 		struct ipc_timing test_timing2 = ipc_timing_initializer(test_timing2, 1, 5,0,NULL,timing_handler2);
-		if (ipc_server_init(IPC_SERVER_TEST, ipcServerHandler) < 0)
+		if (ipc_server_init(IPC_TEST, test_ipc_handler) < 0)
 		{
 			printf("server init error\n");
 			exit(-1);
 		}
 		unsigned int bz = 1000;
-		ipc_server_setopt(IPC_SEROPT_SET_MANAGER, ipcClientManager);
+		ipc_server_setopt(IPC_SEROPT_SET_MANAGER, test_ipc_manager);
 		ipc_server_setopt(IPC_SEROPT_SET_BUF_SIZE, &bz);
 		pthread_create(&task_pid, NULL, monitor_task, NULL);
 		int fd = sig_proxy_init();
@@ -220,8 +222,8 @@ int test_entry_for_ipc(int argc, char **argv)
 		}
 	} else if (!strcmp(argv[0], "client")) {
 		mask = strtoul(argv[1], NULL, 10);
-		const char *s = !strcmp(argv[2], "broker") ? IPC_SERVER_BROKER : IPC_SERVER_TEST;
-		struct ipc_subscriber *subscriber = ipc_subscriber_register(s, mask, NULL, 0, indication_msg_callback, NULL);
+		const char *s = !strcmp(argv[2], "broker") ? IPC_BROKER : IPC_TEST;
+		struct ipc_subscriber *subscriber = ipc_subscriber_register(s, mask, NULL, 0, test_ipc_callback, NULL);
 
 		if (subscriber == NULL) {
 			printf("init error\n");
@@ -229,12 +231,12 @@ int test_entry_for_ipc(int argc, char **argv)
 		}
 		while(1) {
 			sleep(5);
-			//client_sendto_server_easy(IPC_SERVER_TEST, 1003, test_seq2, sizeof(test_seq2), buf, 256);	
+			//ipcc_request_easy(IPC_TEST, 1003, test_seq2, sizeof(test_seq2), buf, 256);	
 		}
 
 	} else if (!strcmp(argv[0], "publisher")) {
 		mask = strtoul(argv[1], NULL, 10);
-		const char *s = !strcmp(argv[2], "broker") ? IPC_SERVER_BROKER : IPC_SERVER_TEST;
+		const char *s = !strcmp(argv[2], "broker") ? IPC_BROKER : IPC_TEST;
 		while (1) {
 			struct ipc_client *client = NULL;
 			client = ipc_client_create(s);
@@ -244,7 +246,7 @@ int test_entry_for_ipc(int argc, char **argv)
 				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq3, sizeof(test_seq3), 3);
 				ipc_client_publish(client, IPC_TO_BROADCAST, mask,  getpid(), test_seq4, sizeof(test_seq4), 3);
 				buf[0] = '\0';
-				client_sendto_server(client, 0x102, "---->Hard", sizeof("---->Hard"), buf, sizeof(buf));
+				ipcc_request(client, 0x102, "---->Hard", sizeof("---->Hard"), buf, sizeof(buf));
 				printf("%s\n", buf);
 				ipc_client_destroy(client);
 			}

@@ -1590,7 +1590,7 @@ int ipc_server_exit()
  * @size: the length of message data
  *
  */
-int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int size)
+int ipc_server_publish(int to, unsigned long topic, int msg_id, const void *data, int size)
 {
 	int dynamic = 0;
 	char buffer[IPC_NOTIFY_MSG_MAX_SIZE];
@@ -1637,7 +1637,7 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, void *data, int 
  * @size: the length of message data
  *
  */
-int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int msg_id, void *data, int size)
+int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int msg_id, const void *data, int size)
 {
 	int dynamic = 0;
 	char buffer[IPC_NOTIFY_MSG_MAX_SIZE];

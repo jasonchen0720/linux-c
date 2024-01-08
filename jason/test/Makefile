@@ -17,8 +17,7 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/lib/include \
--I$(JASON_WORK_DIR)/lib/ipcclient
+-I$(JASON_WORK_DIR)/include \
 
 ifeq ($(CONFIG_IPC),y)
 IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc
@@ -33,8 +32,8 @@ endif
 #ld
 LDFLAGS :=
 
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/ipc/
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/
+LDFLAGS += -L$(JASON_WORK_DIR)/lib/ipc
+LDFLAGS += -L$(JASON_WORK_DIR)/lib
 # All of the sources participating in the build are defined here
 SRCS += \
 ./test.c
@@ -43,7 +42,6 @@ SRCS += test_ipc.c
 endif
 ifeq ($(CONFIG_TREE),y)
 SRCS += test_tree.c
-SRCS += ccl.c
 endif
 ifeq ($(CONFIG_TMR),y)
 SRCS += test_timer.c
@@ -65,7 +63,7 @@ ifeq ($(CONFIG_IPC),y)
 USER_OBJS += $(JASON_WORK_DIR)/lib/ipc/libipc.a
 endif
 ifeq ($(CONFIG_TREE),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/tree/libtree.a
+USER_OBJS += $(JASON_WORK_DIR)/lib/cfg/libcfg.a $(JASON_WORK_DIR)/lib/tree/libtree.a
 endif
 ifeq ($(CONFIG_TMR),y)
 USER_OBJS += $(JASON_WORK_DIR)/lib/timer/libtm.a

@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>	
 #include <limits.h>
+#include <stdlib.h>
 #include <sys/sem.h>
 #include <sys/syscall.h>
 #define gettid()				syscall(__NR_gettid)
@@ -80,7 +81,7 @@ static const char * log_pname(char name[17])
 		name[size] = '\0';
 	return (const char *)name;
 err:
-	sprintf(name, "%d", gettid());
+	sprintf(name, "%ld", gettid());
 	return (const char *)name; 
 }
 
@@ -196,7 +197,7 @@ static void log_backup(int fd, int file_bakup, const char *file_path)
 		return;
 	
 	char s[32];
-	char file[2][PATH_MAX + 1] = {0};
+	char file[2][PATH_MAX + 1] = {{0}, {0}};
 	
 	sprintf(s, "/proc/self/fd/%d", fd);
 	/* File may by renamed by other process, get its link first */

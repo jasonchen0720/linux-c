@@ -357,7 +357,7 @@ int ipc_client_repair(struct ipc_client *client)
  * @tmo: time of send timeout
  */
 int ipc_client_publish(struct ipc_client *client, 
-		int to, unsigned long topic, int msg_id, void *data, int size, int tmo)
+		int to, unsigned long topic, int msg_id, const void *data, int size, int tmo)
 {
 	int rc = 0;
 	int dynamic = 0;

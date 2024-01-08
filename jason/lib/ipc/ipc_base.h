@@ -91,7 +91,7 @@ static inline int topic_check(unsigned long topic)
 {
 	return !(topic & (topic -1));
 }
-static inline void ipc_notify_pack(struct ipc_msg *msg, int to, unsigned long topic, int msg_id, void *data, int size)
+static inline void ipc_notify_pack(struct ipc_msg *msg, int to, unsigned long topic, int msg_id, const void *data, int size)
 {
 	struct ipc_notify *notify = (struct ipc_notify *)msg->data;
 	

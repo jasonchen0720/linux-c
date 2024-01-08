@@ -6,14 +6,14 @@
 #include "client.h"
 
 #define MSG_MAX_SIZE 4096
-int client_sendto_server(struct ipc_client *client, 
+int ipcc_common_request(struct ipc_client *client, 
 		int msg_id, void *data, int size, void *response, int rsplen)
 {
 	char buffer[MSG_MAX_SIZE]={0};
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;
 	ipc_msg->msg_id = msg_id;
 	if (response)
-		ipc_msg->flags |= IPC_FLAG_EXPECT_REPLY;
+		ipc_msg->flags |= IPC_FLAG_REPLY;
 	if (data) {
 		memcpy(ipc_msg->data, data, size);
 		ipc_msg->data_len = size;
@@ -32,7 +32,7 @@ int client_sendto_server(struct ipc_client *client,
 /*
  * function:common interface for short tcp connection
  */
-int client_sendto_server_easy(const char *server, int msg_id, void *data, int size, void *response, int rsplen)
+int ipcc_common_request_easy(const char *server, int msg_id, void *data, int size, void *response, int rsplen)
 {
 	int rc = -1;
 	struct ipc_client client;
@@ -40,20 +40,20 @@ int client_sendto_server_easy(const char *server, int msg_id, void *data, int si
 		printf("%s:error: client init error\n",__FUNCTION__);
 		return -1;
 	}
-	rc = client_sendto_server(&client, msg_id, data, size, response, rsplen);
+	rc = ipcc_common_request(&client, msg_id, data, size, response, rsplen);
 
 	ipc_client_close(&client);
 
 	return rc;
 }
-int subscriber_sendto_server(struct ipc_subscriber *subscriber, 
+int ipcs_common_request(struct ipc_subscriber *subscriber, 
 				int msg_id, void *data, int size, void *response, int rsplen)
 {
 	char buffer[MSG_MAX_SIZE]={0};
 	struct ipc_msg *msg = (struct ipc_msg *)buffer;
 	msg->msg_id = msg_id;
 	if (response)
-		msg->flags |= IPC_FLAG_EXPECT_REPLY;
+		msg->flags |= IPC_FLAG_REPLY;
 	if (data) {
 		memcpy(msg->data, data, size);
 		msg->data_len = size;
@@ -73,16 +73,14 @@ int subscriber_sendto_server(struct ipc_subscriber *subscriber,
  * publisher/client publish topic
  * function:recommend reporting low frequency event to broker with this interface
  */
-int client_topic_publish(const char *broker, unsigned long topic, int msg_id, void *data, int size)
+int ipcc_common_topic_publish(const char *broker, unsigned long topic, int msg_id, void *data, int size)
 {
-	int rc;
 	struct ipc_client client;
-	if(ipc_client_init(broker, &client) < 0)
-	{
+	if (ipc_client_init(broker, &client) < 0) {
 		printf("%s:error: client init error\n",__FUNCTION__);
 		return -1;
 	}
-	rc =  ipc_client_publish(&client, IPC_TO_BROADCAST, topic, msg_id, data, size, 3);
+	int rc =  ipc_client_publish(&client, IPC_TO_BROADCAST, topic, msg_id, data, size, 3);
 
 	ipc_client_close(&client);
 
@@ -103,7 +101,7 @@ client_handle *client_subscriber_register(int service, unsigned long topic_set, 
 
 void client_subscriber_unregister(client_handle *handle)
 {
-	if(handle)
+	if (handle)
 		ipc_subscriber_unregister((struct ipc_subscriber *)handle);
 }
 int client_send_request_msg(client_handle *handle, int msg_id, 
@@ -113,6 +111,6 @@ int client_send_request_msg(client_handle *handle, int msg_id,
 		printf("error: invalid handle\n");
 		return -1;
 	}
-	return subscriber_sendto_server((struct ipc_subscriber *)handle,msg_id, request, reqlen, response, rsplen);
+	return ipcs_common_request((struct ipc_subscriber *)handle,msg_id, request, reqlen, response, rsplen);
 }
 
