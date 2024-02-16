@@ -8,7 +8,7 @@ include $(JASON_WORK_DIR)/cflags.mk
 STATIC_LIBS :=
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS := libjason.so
+SHARED_LIBS := libjc.so
 
 SRCS :=
 
@@ -18,6 +18,7 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(JASON_WORK_DIR)/include \
+-I$(JASON_WORK_DIR)/lib/include
 
 ifeq ($(CONFIG_IPC),y)
 IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc/

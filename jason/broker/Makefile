@@ -18,13 +18,14 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(JASON_WORK_DIR)/include \
+-I$(JASON_WORK_DIR)/lib/include \
 -I$(JASON_WORK_DIR)/lib/ipc \
 
 #ld
 LDFLAGS :=
 
 LDFLAGS += -L$(JASON_WORK_DIR)/lib/ipc
-LDFLAGS += -L$(JASON_WORK_DIR)/lib
+LDFLAGS += -L$(JASON_WORK_DIR)/lib-jc
 # All of the sources participating in the build are defined here
 SRCS += \
 ./broker.c
@@ -44,7 +45,7 @@ $(JASON_WORK_DIR)/lib/ipc/libipc.a \
 $(JASON_WORK_DIR)/lib/tree/libtree.a \
 $(JASON_WORK_DIR)/lib/thread-pool/libthread-pool.a
 
-LIBS := -ljason -lpthread
+LIBS := -ljc -lpthread
 
 SHARE_LIBS :=
 

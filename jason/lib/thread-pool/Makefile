@@ -16,7 +16,7 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/include
+-I$(JASON_WORK_DIR)/lib/include
 
 # All of the sources participating in the build are defined here
 SRCS += \

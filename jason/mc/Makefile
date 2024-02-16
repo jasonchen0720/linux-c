@@ -27,6 +27,7 @@ LIBS := -lpthread
 
 IFLAGS += \
 -I$(JASON_WORK_DIR)/include \
+-I$(JASON_WORK_DIR)/lib/include \
 -I$(JASON_WORK_DIR)/lib/ipc \
 
 USER_OBJS :=

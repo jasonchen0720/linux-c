@@ -17,4 +17,3 @@ ifeq ($(CONFIG_TMR),y)
 endif
 	$(MAKE) -C ./memory-pool  $@
 	$(MAKE) -C ./co  $@
-	$(MAKE) -f ./jason.mk $@

@@ -18,6 +18,7 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(JASON_WORK_DIR)/include \
+-I$(JASON_WORK_DIR)/lib/include \
 
 ifeq ($(CONFIG_IPC),y)
 IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc
@@ -33,7 +34,7 @@ endif
 LDFLAGS :=
 
 LDFLAGS += -L$(JASON_WORK_DIR)/lib/ipc
-LDFLAGS += -L$(JASON_WORK_DIR)/lib
+LDFLAGS += -L$(JASON_WORK_DIR)/lib-jc
 # All of the sources participating in the build are defined here
 SRCS += \
 ./test.c
@@ -71,7 +72,7 @@ endif
 ifeq ($(CONFIG_THREAD_POOL),y)
 USER_OBJS += $(JASON_WORK_DIR)/lib/thread-pool/libthread-pool.a
 endif
-LIBS := -ljason -lpthread
+LIBS := -ljc -lpthread
 
 SHARE_LIBS :=
 
