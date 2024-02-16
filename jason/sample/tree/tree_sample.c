@@ -101,7 +101,7 @@ int bst_test(int argc,char **argv)
 
 }
 
-int test_entry_for_tree(int argc,char **argv)
+int main(int argc,char **argv)
 {
 	if (argc < 2)
 		return -1;

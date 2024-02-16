@@ -1,7 +1,13 @@
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "timer.h"
-#include "test.h"
+#include "generic_log.h"
+
+#define LOG_FILE			"./timer-sample.log"
+#define LOG_SIZE			1024 * 1024
+#define LOG_TAG				"timer-sample"
 
 #define TMRS_MAX	8
 static struct timer_struct timers[TMRS_MAX] = {
@@ -61,7 +67,7 @@ static void test_func(void *arg)
 	printf("Test Timer func leave.\n");
 }
 static struct timer_struct test_timer = TIMER_INITIALIZER;
-int test_entry_for_timer(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	struct timer_option opt = {0, 2, 5, 0};
 	timer_setup(&opt);

@@ -8,29 +8,23 @@
 #include <sys/epoll.h>
 
 #include "co_log.h"
-#include "co_define.h"
+#include "co_socket.h"
 #include "mem_pool.h"
 
-struct sock_struct 
-{
-	struct co_struct co;
-	void *priv;
-	int sockfd;
-};
-struct poll_struct
+struct sk_poll
 {
 	int 				epfd;
 	int					eventsize;
 	struct epoll_event *eventlist;
 };
-#define sock_skfd(coroutine) 	(((struct sock_struct *)coroutine->arg)->sockfd)
-#define sock_epfd(scheduler) 	(((struct poll_struct *)scheduler->priv)->epfd)
-static struct poll_struct 	socket_poll;
+#define sock_skfd(coroutine) 	(((struct co_sock *)coroutine->arg)->sockfd)
+#define sock_epfd(scheduler) 	(((struct sk_poll *)scheduler->priv)->epfd)
+static struct sk_poll 		socket_poll;
 static struct co_scheduler 	socket_sched;
 static struct mem_cache *	socket_cache = NULL;
 int sock_cache_init()
 {
-	size_t chunk_size  = sizeof(struct sock_struct);
+	size_t chunk_size  = sizeof(struct co_sock);
 	size_t chunk_count = mem_chunk_count(2, chunk_size);
 	
 	LOG("co: chunk_size: %lu, chunk_count: %lu", chunk_size, chunk_count);
@@ -47,11 +41,11 @@ static inline void sock_cache_deinit()
 {
 	mem_cache_destroy(socket_cache);
 }
-static inline struct sock_struct * sock_cache_alloc()
+static inline struct co_sock * sock_cache_alloc()
 {
 	return mem_cache_alloc(socket_cache);
 }
-static inline void sock_cache_free(struct sock_struct *sock)
+static inline void sock_cache_free(struct co_sock *sock)
 {
 	return mem_cache_free(socket_cache, sock);
 }
@@ -77,7 +71,7 @@ static int sock_epoll(struct co_struct *co, uint32_t evt)
 {
 	struct epoll_event ev;
 
-	struct sock_struct *sock = co->arg;
+	struct co_sock *sock = co->arg;
 	
 	ev.events 	= evt | EPOLLERR | EPOLLHUP;
 	ev.data.ptr = co;
@@ -288,9 +282,9 @@ ssize_t co_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockadd
 	} while (1);
 }
 
-int co_socket_setup()
+int co_socket_init()
 {
-	struct poll_struct  *so_poll = &socket_poll;
+	struct sk_poll  *so_poll = &socket_poll;
 
 	so_poll->epfd = epoll_create(1024);
 	LOG("socket poller epfd: %d", so_poll->epfd);
@@ -308,9 +302,9 @@ int co_socket_setup()
 	return 0;
 }
 
-int co_socket_create(int sockfd, void (*func)(struct co_struct *), void *priv)
+int co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv)
 {
-	struct sock_struct *sock = sock_cache_alloc();
+	struct co_sock *sock = sock_cache_alloc();
 	if (sock == NULL)
 		return -1;
 
@@ -323,7 +317,11 @@ int co_socket_create(int sockfd, void (*func)(struct co_struct *), void *priv)
 	}
 	return 0;
 }
-
+void co_socket_exit(struct co_sock *sock)
+{
+	close(sock->sockfd);
+	sock_cache_free(sock);
+}
 int co_socket_run()
 {
 	return co_scheduler_run(sock_scheduler());

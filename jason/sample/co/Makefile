@@ -2,10 +2,10 @@ include $(JC_WORK_DIR)/config.mk
 include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES :=
+EXECUTABLES := co-sample
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libco.a
+STATIC_LIBS :=
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
@@ -19,12 +19,15 @@ IFLAGS := \
 -I.\
 -I$(JC_WORK_DIR)/lib/include \
 -I$(JC_WORK_DIR)/lib/tree \
--I$(JC_WORK_DIR)/lib/memory-pool
+-I$(JC_WORK_DIR)/lib/co
 
+#ld
+LDFLAGS :=
+
+LDFLAGS += -L$(JC_WORK_DIR)/lib/co/
+LDFLAGS += -L$(JC_WORK_DIR)/lib/tree/
 # All of the sources participating in the build are defined here
-SRCS += \
-./co_switch.c \
-./co_socket.c
+SRCS += ./co_sample.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -35,9 +38,10 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := 
-
-
+USER_OBJS := \
+$(JC_WORK_DIR)/lib/co/libco.a \
+$(JC_WORK_DIR)/lib/tree/libtree.a \
+$(JC_WORK_DIR)/lib/memory-pool/libmem-pool.a
 
 LIBS :=
 

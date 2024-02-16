@@ -2,7 +2,7 @@ include $(JC_WORK_DIR)/config.mk
 include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES := test
+EXECUTABLES := tree-sample
 
 # static lib name, e.g. libmylib.a
 STATIC_LIBS :=
@@ -17,36 +17,14 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/include \
 -I$(JC_WORK_DIR)/lib/include \
-
-ifeq ($(CONFIG_IPC),y)
-IFLAGS += -I$(JC_WORK_DIR)/lib/ipc
-endif
-ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JC_WORK_DIR)/lib/tree
-endif
-ifeq ($(CONFIG_TMR),y)
-IFLAGS += -I$(JC_WORK_DIR)/lib/timer
-endif
+-I$(JC_WORK_DIR)/lib/tree
 
 #ld
 LDFLAGS :=
 
-LDFLAGS += -L$(JC_WORK_DIR)/lib/ipc
-LDFLAGS += -L$(JC_WORK_DIR)/lib-jc
 # All of the sources participating in the build are defined here
-SRCS += \
-./test.c
-ifeq ($(CONFIG_IPC),y)
-SRCS += test_ipc.c
-endif
-ifeq ($(CONFIG_TREE),y)
-SRCS += test_tree.c
-endif
-ifeq ($(CONFIG_TMR),y)
-SRCS += test_timer.c
-endif
+SRCS += tree_sample.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -60,19 +38,9 @@ DEPS := $(SRCS:.c=.d)
 USER_OBJS := \
 $(JC_WORK_DIR)/lib/common/libcommon.a
 
-ifeq ($(CONFIG_IPC),y)
-USER_OBJS += $(JC_WORK_DIR)/lib/ipc/libipc.a
-endif
-ifeq ($(CONFIG_TREE),y)
 USER_OBJS += $(JC_WORK_DIR)/lib/cfg/libcfg.a $(JC_WORK_DIR)/lib/tree/libtree.a
-endif
-ifeq ($(CONFIG_TMR),y)
-USER_OBJS += $(JC_WORK_DIR)/lib/timer/libtm.a
-endif
-ifeq ($(CONFIG_THREAD_POOL),y)
-USER_OBJS += $(JC_WORK_DIR)/lib/thread-pool/libthread-pool.a
-endif
-LIBS := -ljc -lpthread
+
+LIBS :=
 
 SHARE_LIBS :=
 

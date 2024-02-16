@@ -2,10 +2,10 @@ include $(JC_WORK_DIR)/config.mk
 include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES :=
+EXECUTABLES := ipc-sample
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libco.a
+STATIC_LIBS :=
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
@@ -17,14 +17,17 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
+-I$(JC_WORK_DIR)/include \
 -I$(JC_WORK_DIR)/lib/include \
--I$(JC_WORK_DIR)/lib/tree \
--I$(JC_WORK_DIR)/lib/memory-pool
+-I$(JC_WORK_DIR)/lib/ipc
 
+#ld
+LDFLAGS :=
+
+LDFLAGS += -L$(JC_WORK_DIR)/lib/ipc
+LDFLAGS += -L$(JC_WORK_DIR)/lib-jc
 # All of the sources participating in the build are defined here
-SRCS += \
-./co_switch.c \
-./co_socket.c
+SRCS += ipc_sample.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -35,11 +38,9 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := 
+USER_OBJS := $(JC_WORK_DIR)/lib/common/libcommon.a $(JC_WORK_DIR)/lib/ipc/libipc.a
 
-
-
-LIBS :=
+LIBS := -ljc -lpthread
 
 SHARE_LIBS :=
 

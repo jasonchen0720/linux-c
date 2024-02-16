@@ -135,7 +135,7 @@ static int _time()
 	return 0;
 }
 
-int test_entry_for_ipc(int argc, char **argv)
+int main(int argc, char **argv)
 {
 #if 0
 	int p[2];
