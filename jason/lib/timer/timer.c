@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <signal.h>
-#include "logger.h"
+#include "generic_log.h"
 #include "timer.h"
 
 struct timer_base

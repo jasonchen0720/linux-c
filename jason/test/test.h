@@ -2,7 +2,7 @@
 #define __TEST_H__
 #include <stdio.h>
 #include <string.h>
-#include "logger.h"
+#include "generic_log.h"
 
 #define LOG_FILE			"./test.log"
 #define LOG_SIZE			1024 * 1024

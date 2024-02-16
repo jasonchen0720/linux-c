@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <assert.h>
 #include "thread_pool.h"
-#include "logger.h"
+#include "generic_log.h"
 
 static pthread_condattr_t __cond_attr;
 static pthread_once_t __init_once = PTHREAD_ONCE_INIT;

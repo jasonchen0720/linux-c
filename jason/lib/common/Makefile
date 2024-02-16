@@ -20,7 +20,7 @@ IFLAGS := \
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./logger.c \
+./generic_log.c \
 ./generic_bit.c \
 ./generic_file.c \
 ./generic_proc.c
