@@ -1,18 +1,31 @@
 #ifndef _LIST_H
 #define _LIST_H
-#define LIST_POISON1  ((void *) 0x00100100)
-#define LIST_POISON2  ((void *) 0x00200200)
+#define LIST_POISON1  (NULL)
+#define LIST_POISON2  (NULL)
 
-struct list_head 
+struct list_head
 {
 	struct list_head *next;
 	struct list_head *prev;
 };
 
+/**
+ * container_of - cast a member of a structure out to the containing structure
+ * @ptr:	the pointer to the member.
+ * @type:	the type of the container struct this is embedded in.
+ * @member:	the name of the member within the struct.
+ *
+ */
+#define offsetof(type, member) ((char *) &((type *)0)->member)
+#define container_of(ptr, type, member) ({			\
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+	(type *)( (char *)__mptr - offsetof(type,member) );})
 
 
 #define list_entry(ptr, type, member)   \
 ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+
+#define list_head_initializer(name) { &(name), &(name) }
 
 #define init_list_head(ptr)   \
 do {(ptr)->next = (ptr); (ptr)->prev = (ptr);} while(0)
@@ -62,6 +75,33 @@ do {(ptr)->prev->next = (ptr)->next; (ptr)->next->prev = (ptr)->prev;} while(0)
                 for (pos = (head)->prev, n = pos->prev; \
                      pos != (head); \
                      pos = n, n = pos->prev)
+
+/**
+ * list_for_each_entry_reverse - iterate backwards over list of given type.
+ * @pos:	the type * to use as a loop cursor.
+ * @head:	the head for your list.
+ * @member: the name of the list_struct within the struct.
+ */
+#define list_for_each_entry_reverse(pos, head, member)			\
+								for (pos = list_entry((head)->prev, typeof(*pos), member);	\
+									 &pos->member != (head);	\
+									 pos = list_entry(pos->member.prev, typeof(*pos), member))
+				
+/**
+ * list_for_each_entry_safe_reverse - iterate backwards over list safe against removal
+ * @pos:	the type * to use as a loop cursor.
+ * @n:		another type * to use as temporary storage
+ * @head:	the head for your list.
+ * @member: the name of the list_struct within the struct.
+ *
+ * Iterate backwards over list of given type, safe against removal
+ * of list entry.
+ */
+#define list_for_each_entry_safe_reverse(pos, n, head, member)		\
+								for (pos = list_entry((head)->prev, typeof(*pos), member),	\
+									n = list_entry(pos->member.prev, typeof(*pos), member); \
+									 &pos->member != (head);					\
+									 pos = n, n = list_entry(n->member.prev, typeof(*n), member))
 
 static inline void INIT_LIST_HEAD(struct list_head *list)
 {

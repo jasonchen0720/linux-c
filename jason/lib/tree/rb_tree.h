@@ -21,6 +21,21 @@ struct rb_tree
 	void (*printer)(const struct rb_node *);
 	unsigned long rb_count;
 };
+#define rb_tree_init(rbt, c, s, p) \
+	do {\
+		(rbt)->comparator	= (c);\
+		(rbt)->searcher		= (s);\
+		(rbt)->printer		= (p);\
+		(rbt)->root			= NULL;\
+		(rbt)->rb_count		= 0UL;\
+	} while (0)
+#define rb_tree_initializer(c, s, p) \
+{ /* root */NULL, \
+  /* comparator */c, \
+  /* searcher */s, \
+  /* printer */p, \
+  /* handler */0UL, \
+}
 #define RB_RED		0
 #define RB_BLACK	1
 #define rb_is_red(n) 		((n)->color == RB_RED)
@@ -31,6 +46,7 @@ struct rb_tree
 #define rb_entry(ptr, type, member)   \
 ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
+#define rb_count(tree) ((tree)->rb_count)
 void rb_print(struct rb_tree *tree);
 struct rb_node * rb_insert(struct rb_node *node, struct rb_tree *tree);
 void rb_remove(struct rb_node *node, struct rb_tree *tree);
