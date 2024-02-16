@@ -1,4 +1,4 @@
-export JASON_WORK_DIR=$(shell pwd)
+export JC_WORK_DIR=$(shell pwd)
 
 all clean:
 	$(MAKE) -C ./lib $@

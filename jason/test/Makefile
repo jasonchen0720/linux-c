@@ -1,5 +1,5 @@
-include $(JASON_WORK_DIR)/config.mk
-include $(JASON_WORK_DIR)/cflags.mk
+include $(JC_WORK_DIR)/config.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := test
@@ -17,24 +17,24 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/include \
--I$(JASON_WORK_DIR)/lib/include \
+-I$(JC_WORK_DIR)/include \
+-I$(JC_WORK_DIR)/lib/include \
 
 ifeq ($(CONFIG_IPC),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc
+IFLAGS += -I$(JC_WORK_DIR)/lib/ipc
 endif
 ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/tree
+IFLAGS += -I$(JC_WORK_DIR)/lib/tree
 endif
 ifeq ($(CONFIG_TMR),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/timer
+IFLAGS += -I$(JC_WORK_DIR)/lib/timer
 endif
 
 #ld
 LDFLAGS :=
 
-LDFLAGS += -L$(JASON_WORK_DIR)/lib/ipc
-LDFLAGS += -L$(JASON_WORK_DIR)/lib-jc
+LDFLAGS += -L$(JC_WORK_DIR)/lib/ipc
+LDFLAGS += -L$(JC_WORK_DIR)/lib-jc
 # All of the sources participating in the build are defined here
 SRCS += \
 ./test.c
@@ -58,19 +58,19 @@ OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := \
-$(JASON_WORK_DIR)/lib/common/libcommon.a
+$(JC_WORK_DIR)/lib/common/libcommon.a
 
 ifeq ($(CONFIG_IPC),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/ipc/libipc.a
+USER_OBJS += $(JC_WORK_DIR)/lib/ipc/libipc.a
 endif
 ifeq ($(CONFIG_TREE),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/cfg/libcfg.a $(JASON_WORK_DIR)/lib/tree/libtree.a
+USER_OBJS += $(JC_WORK_DIR)/lib/cfg/libcfg.a $(JC_WORK_DIR)/lib/tree/libtree.a
 endif
 ifeq ($(CONFIG_TMR),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/timer/libtm.a
+USER_OBJS += $(JC_WORK_DIR)/lib/timer/libtm.a
 endif
 ifeq ($(CONFIG_THREAD_POOL),y)
-USER_OBJS += $(JASON_WORK_DIR)/lib/thread-pool/libthread-pool.a
+USER_OBJS += $(JC_WORK_DIR)/lib/thread-pool/libthread-pool.a
 endif
 LIBS := -ljc -lpthread
 

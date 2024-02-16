@@ -1,5 +1,5 @@
-include $(JASON_WORK_DIR)/config.mk
-include $(JASON_WORK_DIR)/cflags.mk
+include $(JC_WORK_DIR)/config.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := mcd
@@ -26,16 +26,16 @@ C_DEPS := $(C_SRCS:.c=.d)
 LIBS := -lpthread
 
 IFLAGS += \
--I$(JASON_WORK_DIR)/include \
--I$(JASON_WORK_DIR)/lib/include \
--I$(JASON_WORK_DIR)/lib/ipc \
+-I$(JC_WORK_DIR)/include \
+-I$(JC_WORK_DIR)/lib/include \
+-I$(JC_WORK_DIR)/lib/ipc \
 
 USER_OBJS :=
 
 USER_OBJS = \
-$(JASON_WORK_DIR)/lib/ipc/libipc.a \
-$(JASON_WORK_DIR)/lib/cfg/libcfg.a \
-$(JASON_WORK_DIR)/lib/common/libcommon.a \
+$(JC_WORK_DIR)/lib/ipc/libipc.a \
+$(JC_WORK_DIR)/lib/cfg/libcfg.a \
+$(JC_WORK_DIR)/lib/common/libcommon.a \
 
 
 

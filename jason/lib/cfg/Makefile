@@ -1,4 +1,4 @@
-include $(JASON_WORK_DIR)/cflags.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
@@ -16,8 +16,8 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/lib/include \
--I$(JASON_WORK_DIR)/lib/tree
+-I$(JC_WORK_DIR)/lib/include \
+-I$(JC_WORK_DIR)/lib/tree
 
 # All of the sources participating in the build are defined here
 include subdir.mk

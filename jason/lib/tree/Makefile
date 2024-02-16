@@ -1,4 +1,4 @@
-include $(JASON_WORK_DIR)/cflags.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=

@@ -1,5 +1,5 @@
-include $(JASON_WORK_DIR)/config.mk
-include $(JASON_WORK_DIR)/cflags.mk
+include $(JC_WORK_DIR)/config.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
@@ -17,13 +17,13 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/lib/include \
+-I$(JC_WORK_DIR)/lib/include \
 
 ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/tree
+IFLAGS += -I$(JC_WORK_DIR)/lib/tree
 endif
 ifeq ($(CONFIG_THREAD_POOL),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/thread-pool
+IFLAGS += -I$(JC_WORK_DIR)/lib/thread-pool
 endif
 
 # All of the sources participating in the build are defined here

@@ -1,5 +1,5 @@
-include $(JASON_WORK_DIR)/config.mk
-include $(JASON_WORK_DIR)/cflags.mk
+include $(JC_WORK_DIR)/config.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 
 #EXECUTABLES :=
@@ -17,14 +17,14 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JASON_WORK_DIR)/include \
--I$(JASON_WORK_DIR)/lib/include
+-I$(JC_WORK_DIR)/include \
+-I$(JC_WORK_DIR)/lib/include
 
 ifeq ($(CONFIG_IPC),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/ipc/
+IFLAGS += -I$(JC_WORK_DIR)/lib/ipc/
 endif
 ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JASON_WORK_DIR)/lib/tree/
+IFLAGS += -I$(JC_WORK_DIR)/lib/tree/
 endif
 # All of the sources participating in the build are defined here
 
@@ -39,7 +39,7 @@ include client/subdir.mk
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=$(JASON_WORK_DIR)/lib/ipc/libipc.a $(JASON_WORK_DIR)/lib/tree/libtree.a $(JASON_WORK_DIR)/lib/common/libcommon.a
+USER_OBJS :=$(JC_WORK_DIR)/lib/ipc/libipc.a $(JC_WORK_DIR)/lib/tree/libtree.a $(JC_WORK_DIR)/lib/common/libcommon.a
 
 LIBS :=
 
