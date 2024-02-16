@@ -4,7 +4,7 @@ include $(JASON_WORK_DIR)/cflags.mk
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libbase.a
+STATIC_LIBS := libcommon.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=

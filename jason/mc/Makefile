@@ -34,7 +34,7 @@ USER_OBJS :=
 USER_OBJS = \
 $(JASON_WORK_DIR)/lib/ipc/libipc.a \
 $(JASON_WORK_DIR)/lib/cfg/libcfg.a \
-$(JASON_WORK_DIR)/lib/common/libbase.a \
+$(JASON_WORK_DIR)/lib/common/libcommon.a \
 
 
 

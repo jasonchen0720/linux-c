@@ -39,7 +39,7 @@ OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := \
-$(JASON_WORK_DIR)/lib/common/libbase.a \
+$(JASON_WORK_DIR)/lib/common/libcommon.a \
 $(JASON_WORK_DIR)/lib/ipc/libipc.a \
 $(JASON_WORK_DIR)/lib/tree/libtree.a \
 $(JASON_WORK_DIR)/lib/thread-pool/libthread-pool.a
