@@ -10,16 +10,16 @@
 #include "co_log.h"
 #include "co_socket.h"
 #include "mem_pool.h"
-
-struct sk_poll
+#define SK_MAX_EVENTS	1024
+struct sk_epoll
 {
-	int 				epfd;
-	int					eventsize;
-	struct epoll_event *eventlist;
+	int 			   epfd;
+	struct epoll_event events[SK_MAX_EVENTS];
 };
 #define sock_skfd(coroutine) 	(((struct co_sock *)coroutine->arg)->sockfd)
-#define sock_epfd(scheduler) 	(((struct sk_poll *)scheduler->priv)->epfd)
-static struct sk_poll 		socket_poll;
+#define sock_epfd(scheduler) 	(((struct sk_epoll *)scheduler->priv)->epfd)
+#define sock_sched()			(&socket_sched)
+static struct sk_epoll 		socket_epoll;
 static struct co_scheduler 	socket_sched;
 static struct mem_cache *	socket_cache = NULL;
 int sock_cache_init()
@@ -49,11 +49,6 @@ static inline void sock_cache_free(struct co_sock *sock)
 {
 	return mem_cache_free(socket_cache, sock);
 }
-
-static inline struct co_scheduler *sock_scheduler()
-{
-	return &socket_sched;
-}
 static int sock_options(int sockfd)
 {
 	int opt = 1;
@@ -79,34 +74,36 @@ static int sock_epoll(struct co_struct *co, uint32_t evt)
 	epoll_ctl(sock_epfd(co->scheduler), EPOLL_CTL_ADD, sock->sockfd, &ev);
 
 	LOG("co@%p yield.", co);
-	co->yield(co);
+	co_yield(co);
 	LOG("co@%p resume.", co);
 	
 	epoll_ctl(sock_epfd(co->scheduler), EPOLL_CTL_DEL, sock->sockfd, &ev);
 	return 0;
 }
-static void sock_poll(struct co_scheduler *scheduler)
+static int sock_schedule(struct co_scheduler *scheduler, int64_t usectmo)
 {
 	int ret;
-	int timeout = -1;
 	struct co_struct *co;
-	struct epoll_event events[32];
+	struct sk_epoll  *sk = scheduler->priv;
 	do {
-		LOG("epoll wait....");
-		ret = epoll_wait(sock_epfd(scheduler), events, 32, timeout);
+		LOG("epoll wait %ld us....", usectmo);
+		ret = epoll_wait(sk->epfd, sk->events, SK_MAX_EVENTS, usectmo < 0 ? -1 : usectmo / 1000);
 		if (ret > 0) {
 			int n = 0;
 			for (n = 0; n < ret; n++) {
-				co = events[n].data.ptr;
+				co = sk->events[n].data.ptr;
 				LOG("sockfd:%d.", sock_skfd(co));
 				LOG("resume co@%p.", co);
-				scheduler->resume(co);
+				co_resume(co);
 			}
-			break;
-		} else if (ret < 0 && errno == EINTR) {
+			return n;
+		} else if (ret == 0) {
+			return 0;
+		} else if (errno == EINTR) {
 			continue;
 		}
 		LOG("epoll_wait ret: %d errno: %d", ret, errno);
+		return -1;
 	} while (1);
 }
 int co_socket(int domain, int type, int protocol)
@@ -129,7 +126,7 @@ int  co_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
 	int sock;
 	do {
-		sock_epoll(sock_scheduler()->runningco, EPOLLIN);
+		sock_epoll(sock_sched()->runningco, EPOLLIN);
 	retry:
 		sock = accept(sockfd, addr, addrlen);
 		if (sock == -1) {
@@ -167,7 +164,7 @@ int co_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 				continue;
 			case EAGAIN: /* On unix, same as EWOULDBLOCK */
 			case EINPROGRESS:
-				sock_epoll(sock_scheduler()->runningco, EPOLLOUT);
+				sock_epoll(sock_sched()->runningco, EPOLLOUT);
 				continue;
 			default:
 				break;
@@ -199,7 +196,7 @@ ssize_t co_send(int sockfd, const void *buf, size_t len, int flags)
 			}
 		}
 		if (sent < len)
-			sock_epoll(sock_scheduler()->runningco, EPOLLIN);
+			sock_epoll(sock_sched()->runningco, EPOLLIN);
 		else break;
 	}
 out:
@@ -227,7 +224,7 @@ ssize_t co_sendto(int sockfd, const void *buf, size_t len, int flags, const stru
 			}
 		}
 		if (sent < len)
-			sock_epoll(sock_scheduler()->runningco, EPOLLOUT);
+			sock_epoll(sock_sched()->runningco, EPOLLOUT);
 		else
 			break;
 	}
@@ -238,7 +235,7 @@ ssize_t co_sendto(int sockfd, const void *buf, size_t len, int flags, const stru
 
 ssize_t co_recv(int sockfd, void *buf, size_t len, int flags)
 {
-	sock_epoll(sock_scheduler()->runningco, EPOLLIN);
+	sock_epoll(sock_sched()->runningco, EPOLLIN);
 
 	do {
 		ssize_t rcvd = recv(sockfd, buf, len, flags);
@@ -261,7 +258,7 @@ ssize_t co_recv(int sockfd, void *buf, size_t len, int flags)
 
 ssize_t co_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen)
 {
-	sock_epoll(sock_scheduler()->runningco, EPOLLIN);
+	sock_epoll(sock_sched()->runningco, EPOLLIN);
 
 	do {
 		ssize_t rcvd = recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
@@ -284,20 +281,18 @@ ssize_t co_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockadd
 
 int co_socket_init()
 {
-	struct sk_poll  *so_poll = &socket_poll;
+	struct sk_epoll *epoll = &socket_epoll;
 
-	so_poll->epfd = epoll_create(1024);
-	LOG("socket poller epfd: %d", so_poll->epfd);
-	if (so_poll->epfd < 0)
+	epoll->epfd = epoll_create(1024);
+	LOG("socket poller epfd: %d", epoll->epfd);
+	if (epoll->epfd < 0)
 		return -1;
-	so_poll->eventsize = 0;
-	so_poll->eventlist = NULL;
-
+	
 	if (sock_cache_init() < 0) {
-		close(so_poll->epfd);
+		close(epoll->epfd);
 		return -1;
 	}
-	co_scheduler_init(sock_scheduler(), sock_poll, so_poll);
+	co_scheduler_init(sock_sched(), sock_schedule, epoll);
 	
 	return 0;
 }
@@ -311,18 +306,18 @@ int co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv)
 	sock->sockfd = sockfd;
 	sock->priv	 = priv;
 	
-	if (co_init(&sock->co, sock_scheduler(), func, sock) == -1) {
+	if (co_init(&sock->co, sock_sched(), func, sock) == -1) {
 		sock_cache_free(sock);
 		return -1;
 	}
 	return 0;
 }
-void co_socket_exit(struct co_sock *sock)
+void co_socket_quit(struct co_sock *sock)
 {
 	close(sock->sockfd);
 	sock_cache_free(sock);
 }
 int co_socket_run()
 {
-	return co_scheduler_run(sock_scheduler());
+	return co_scheduler_run(sock_sched());
 }

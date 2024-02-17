@@ -23,7 +23,7 @@ IFLAGS := \
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./co_switch.c \
+./co_core.c \
 ./co_socket.c
 
 %.o: ./%.c

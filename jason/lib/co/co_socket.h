@@ -18,7 +18,7 @@ ssize_t co_recv(int sockfd, void *buf, size_t len, int flags);
 ssize_t co_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 int co_socket_init();
 int  co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv);
-void co_socket_exit(struct co_sock *sock);
+void co_socket_quit(struct co_sock *sock);
 int co_socket_run();
 
 #endif

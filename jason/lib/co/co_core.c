@@ -99,13 +99,13 @@ static int64_t co_time()
 	return ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
 int co_switch(struct co_context *cur_ctx, struct co_context *new_ctx);
-static void co_yield(struct co_struct *co)
+void co_yield(struct co_struct *co)
 {
 	assert(co->scheduler->runningco == co);
 	
 	co_switch(&co->context,	&co->scheduler->context);
 }
-static void co_resume(struct co_struct *co)
+void co_resume(struct co_struct *co)
 {
 	co->scheduler->runningco = co;
 	
@@ -113,7 +113,7 @@ static void co_resume(struct co_struct *co)
 
 	co->scheduler->runningco = NULL;
 }
-static void co_sleep(struct co_struct *co, int64_t usec)
+void co_sleep(struct co_struct *co, int64_t usec)
 {
 	assert(co->scheduler->runningco == co);
 	if (usec > 0) {
@@ -122,23 +122,23 @@ static void co_sleep(struct co_struct *co, int64_t usec)
 		while (n != rb_insert(n, &co->scheduler->sleep_tree))
 			co->sleep_expired_time++;
 	}
-	co->yield(co);
+	co_yield(co);
 }
 
-static int co_exptime_comparator(const struct rb_node *n1, const struct rb_node *n2)
+static int exptime_comparator(const struct rb_node *n1, const struct rb_node *n2)
 {
 	struct co_struct *c1 = rb_entry(n1, struct co_struct, sleep_node);
 	struct co_struct *c2 = rb_entry(n2, struct co_struct, sleep_node);
 
 	return c1->sleep_expired_time > c2->sleep_expired_time;
 }
-static int co_exptime_searcher(const void *data, const struct rb_node *n)
+static int exptime_searcher(const void *data, const struct rb_node *n)
 {
 	const struct co_struct *c1 = rb_entry(n, struct co_struct, sleep_node);
 	const struct co_struct *c2 = (const struct co_struct *)data;
 	return c1->sleep_expired_time > c2->sleep_expired_time;
 }
-static void co_exptime_printer(const struct rb_node *n)
+static void exptime_printer(const struct rb_node *n)
 {
 	if (n) {
 		const struct co_struct *co = rb_entry(n, struct co_struct, sleep_node);
@@ -148,42 +148,52 @@ static void co_exptime_printer(const struct rb_node *n)
 	
 	printf("\033[0m\n");
 }
-
-static inline void schedule_expired(struct co_scheduler *scheduler)
+static int64_t next_timeout(struct co_scheduler *scheduler)
 {
-	struct rb_node *n = rb_first(&scheduler->sleep_tree);
+	struct rb_node * n = rb_first(&scheduler->sleep_tree);
 	if (n) {
-		struct co_struct *co = rb_entry(n, struct co_struct, sleep_node);
-		if (co_time() >= co->sleep_expired_time) {
+		struct co_struct * co = rb_entry(n, struct co_struct, sleep_node);
+		int64_t tmo = co->sleep_expired_time - co_time();
+		return tmo > 0 ? tmo : 0;
+	}
+	return -1;
+}
+/*
+ * schedule_expired - return next timeout duration
+ */
+static void schedule_expired(struct co_scheduler *scheduler)
+{
+	struct rb_node *n;
+	struct co_struct *co;
+	for (n = rb_first(&scheduler->sleep_tree); n ; n = rb_next(n)) {
+		co = rb_entry(n, struct co_struct, sleep_node);
+		int64_t diff = co->sleep_expired_time - co_time();
+		LOG("co->sleep_expired_time: %ld, diff: %ld", co->sleep_expired_time, diff);
+		if (diff <= 0) {
 			rb_remove(n, &scheduler->sleep_tree);
-			scheduler->resume(co);
+			co_resume(co);
 		}
 	}
 }
-static inline void schedule_ready(struct co_scheduler *scheduler)
+static void schedule_ready(struct co_scheduler *scheduler)
 {
-	if (!list_empty(&scheduler->ready_head)) {
-		struct co_struct *co = list_first_entry(&scheduler->ready_head, struct co_struct, ready_list);
+	struct co_struct *co, *t;
+	list_for_each_entry_safe(co, t, &scheduler->ready_head, ready_list) {
 		list_del(&co->ready_list);
-		scheduler->resume(co);
+		co_resume(co);
 	}
 }
 
-int co_scheduler_init(struct co_scheduler *scheduler, void (*poll)(struct co_scheduler *), void *priv)
+int co_scheduler_init(struct co_scheduler *scheduler, int (*schedule)(struct co_scheduler *, int64_t), void *priv)
 {	
 	INIT_LIST_HEAD(&scheduler->ready_head);
-	scheduler->sleep_tree.printer 	= co_exptime_printer;
-	scheduler->sleep_tree.searcher 	= co_exptime_searcher;
-	scheduler->sleep_tree.comparator= co_exptime_comparator;
-	scheduler->sleep_tree.rb_count 	= 0UL;
-	scheduler->sleep_tree.root 		= NULL;
-
 	scheduler->coid 		= 0L;
 	scheduler->runningco 	= NULL;
 	//scheduler->yield		= co_yield;
-	scheduler->resume		= co_resume;
+	//scheduler->resume		= co_resume;
 	scheduler->priv			= priv;
-	scheduler->poll			= poll;
+	scheduler->schedule		= schedule;
+	rb_tree_init(&scheduler->sleep_tree, exptime_comparator, exptime_searcher, exptime_printer);
 	return 0;
 }
 int co_scheduler_run(struct co_scheduler *scheduler)
@@ -191,7 +201,7 @@ int co_scheduler_run(struct co_scheduler *scheduler)
 	while (1) {
 		schedule_expired(scheduler);
 		schedule_ready(scheduler);
-		scheduler->poll(scheduler);
+		scheduler->schedule(scheduler, next_timeout(scheduler));
 	}
 	return 0;
 }
@@ -212,7 +222,7 @@ static void co_entry(struct co_struct *co)
 	co->routine(co);
 	LOG("co@%p ID[%ld] exited.", co, co->id);
 
-	co->yield(co);
+	co_yield(co);
 }
 
 int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine)(struct co_struct *), void *arg)
@@ -287,8 +297,8 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine
 	co->stack 		= stack;
 	co->arg			= arg;
 	co->routine		= routine;
-	co->yield		= co_yield;
-	co->sleep		= co_sleep;
+	//co->yield		= co_yield;
+	//co->sleep		= co_sleep;
 	list_add_tail(&co->ready_list, &scheduler->ready_head);
 	LOG("co@%p initialized.", co);
 	return 0;

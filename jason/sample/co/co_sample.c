@@ -15,7 +15,7 @@ static void func(struct co_struct *c)
 {
 	LOG("The program 1th enter.");
 	LOG("co@%p  arg:%s", c, (const char *)c->arg);
-	c->yield(c);
+	co_yield(c);
 	LOG("The program 2th enter.");
 }
 static void test()
@@ -26,9 +26,9 @@ static void test()
 	LOG("The program 1th enter.");
 	co_scheduler_init(s, NULL, NULL);
 	co_init(c, s, func, "hello world");
-	s->resume(c);
+	co_resume(c);
 	LOG("The program 2th enter.");
-	s->resume(c);
+	co_resume(c);
 	LOG("The program 3th enter.");
 	LOG("co@%p test exited.", c);
 }
@@ -43,7 +43,6 @@ static void test()
 static void server_proc(struct co_struct *co)
 {
 	char buf[1024];
-	
 	struct co_sock *sock = co->arg;
 	LOG("recv co@%p enter, sockfd: %d", co, sock->sockfd);
 	do {
@@ -56,12 +55,13 @@ static void server_proc(struct co_struct *co)
 		
 		LOG("Recvd from client: <-- %s", buf);
 
+		co_sleep(co, 3 * 1000 * 1000);
 		
 		size_t s = sprintf(buf, "Message from Jay Chan at %ld", (long)time(NULL));
 	    send(sock->sockfd, buf, s, 0);
 	} while (1);
 	LOG("recv co@%p exit, sockfd: %d", co, sock->sockfd);
-	co_socket_exit(sock);
+	co_socket_quit(sock);
 }
 
 static void server_func(struct co_struct *co)
@@ -80,7 +80,7 @@ static void server_func(struct co_struct *co)
 		
 		co_socket_exec(sockfd, server_proc, NULL);
 	}
-	co_socket_exit(sock);
+	co_socket_quit(sock);
 }
 
 int main(int argc, char *argv[])
