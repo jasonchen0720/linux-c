@@ -1,4 +1,5 @@
 include $(JC_WORK_DIR)/config.mk
+include $(JC_WORK_DIR)/cflags.mk
 
 all clean:
 ifeq ($(CONFIG_IPC),y)

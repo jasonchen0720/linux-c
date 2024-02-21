@@ -13,6 +13,7 @@ SHARED_LIBS :=
 SRCS :=
 
 CFLAGS +=
+CFLAGS += -D__x64_argoverstack__
 
 # Every subdirectory with source files must be described here
 IFLAGS := \

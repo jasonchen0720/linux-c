@@ -1,1 +1,4 @@
-CFLAGS += -fPIC -Os -Wall -Werror -c -MMD -MP -Wno-unused-result -g #-fstack-protector-strong
+CFLAGS += -fPIC -Os -Wall -c -MMD -MP -Wno-unused-result -g
+#CFLAGS += -Werror
+#CFLAGS += -fstack-protector-strong
+CFLAGS += -Wno-unused-function

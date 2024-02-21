@@ -22,7 +22,7 @@ IFLAGS := \
 -I$(JC_WORK_DIR)/lib/co
 
 #ld
-LDFLAGS :=
+LDFLAGS +=
 
 LDFLAGS += -L$(JC_WORK_DIR)/lib/co/
 LDFLAGS += -L$(JC_WORK_DIR)/lib/tree/
@@ -41,7 +41,8 @@ DEPS := $(SRCS:.c=.d)
 USER_OBJS := \
 $(JC_WORK_DIR)/lib/co/libco.a \
 $(JC_WORK_DIR)/lib/tree/libtree.a \
-$(JC_WORK_DIR)/lib/memory-pool/libmem-pool.a
+$(JC_WORK_DIR)/lib/memory-pool/libmem-pool.a \
+$(JC_WORK_DIR)/lib/common/libcommon.a
 
 LIBS :=
 

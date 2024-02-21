@@ -45,7 +45,7 @@ LIBS :=
 
 SHARE_LIBS := -lpthread
 
-SHARE_LDFLAGS :=
+SHARE_LDFLAGS := $(LDFLAGS)
 
 # All Target
 all: $(STATIC_LIBS) $(SHARED_LIBS)

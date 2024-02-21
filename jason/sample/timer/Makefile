@@ -24,7 +24,7 @@ IFLAGS += -I$(JC_WORK_DIR)/lib/tree
 IFLAGS += -I$(JC_WORK_DIR)/lib/timer
 
 #ld
-LDFLAGS :=
+LDFLAGS +=
 
 # All of the sources participating in the build are defined here
 SRCS += timer_sample.c

@@ -17,6 +17,7 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS :=
 
+LDFLAGS +=
 # All of the sources participating in the build are defined here
 -include subdir.mk
 
@@ -25,14 +26,14 @@ C_DEPS := $(C_SRCS:.c=.d)
 
 LIBS := -lpthread
 
-IFLAGS += \
+IFLAGS +=\
 -I$(JC_WORK_DIR)/include \
 -I$(JC_WORK_DIR)/lib/include \
 -I$(JC_WORK_DIR)/lib/ipc \
 
 USER_OBJS :=
 
-USER_OBJS = \
+USER_OBJS =\
 $(JC_WORK_DIR)/lib/ipc/libipc.a \
 $(JC_WORK_DIR)/lib/cfg/libcfg.a \
 $(JC_WORK_DIR)/lib/common/libcommon.a \

@@ -1,3 +1,4 @@
+include $(JC_WORK_DIR)/config.mk
 include $(JC_WORK_DIR)/cflags.mk
 
 # executable program name, e.g. myprog 

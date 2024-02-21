@@ -86,8 +86,8 @@ static int sock_schedule(struct co_scheduler *scheduler, int64_t usectmo)
 	struct co_struct *co;
 	struct sk_epoll  *sk = scheduler->priv;
 	do {
-		LOG("epoll wait %ld us....", usectmo);
-		ret = epoll_wait(sk->epfd, sk->events, SK_MAX_EVENTS, usectmo < 0 ? -1 : usectmo / 1000);
+		LOG("epoll wait %lld us....", usectmo);
+		ret = epoll_wait(sk->epfd, sk->events, SK_MAX_EVENTS, usectmo < 0 ? -1 : (usectmo + 500) / 1000);
 		if (ret > 0) {
 			int n = 0;
 			for (n = 0; n < ret; n++) {
@@ -98,11 +98,12 @@ static int sock_schedule(struct co_scheduler *scheduler, int64_t usectmo)
 			}
 			return n;
 		} else if (ret == 0) {
+			LOG("epoll timedout: %lld", usectmo);
 			return 0;
 		} else if (errno == EINTR) {
 			continue;
 		}
-		LOG("epoll_wait ret: %d errno: %d", ret, errno);
+		LOG("epollt ret: %d errno: %d", ret, errno);
 		return -1;
 	} while (1);
 }

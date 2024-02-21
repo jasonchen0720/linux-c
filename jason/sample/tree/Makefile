@@ -21,7 +21,7 @@ IFLAGS := \
 -I$(JC_WORK_DIR)/lib/tree
 
 #ld
-LDFLAGS :=
+LDFLAGS +=
 
 # All of the sources participating in the build are defined here
 SRCS += tree_sample.c

@@ -5,9 +5,8 @@
 #include <arpa/inet.h>
 #include <string.h>
 
+#include "co_log.h"
 #include "co_socket.h"
-
-#define LOG(format,...) printf("%s(%d): "format"\n\n",  __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 static struct co_struct 	coroutine;
 static struct co_scheduler 	scheduler;

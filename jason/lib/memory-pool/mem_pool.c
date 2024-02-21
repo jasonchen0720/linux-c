@@ -5,13 +5,12 @@
 
 #include "mem_pool.h"
 
-#define LOG(format,...) printf("%s(%d): "format"\n\n",  __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define __GENERIC_DBG 1
+#include "generic_log.h"
 
-#if 1
-#define DBG(format,...) printf("%s(%d): "format"\n\n",  __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#else
-#define DBG(format,...)
-#endif
+#define LOG_TAG "mem-pool"
+#define LOG(format,...) LOGI(format"\n", ##__VA_ARGS__)
+#define DBG(format,...) LOGD(format"\n", ##__VA_ARGS__)
 
 #if defined(__i386__)
 #define ALIGN	4

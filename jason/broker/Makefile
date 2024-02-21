@@ -22,7 +22,7 @@ IFLAGS := \
 -I$(JC_WORK_DIR)/lib/ipc \
 
 #ld
-LDFLAGS :=
+LDFLAGS +=
 
 LDFLAGS += -L$(JC_WORK_DIR)/lib/ipc
 LDFLAGS += -L$(JC_WORK_DIR)/lib-jc
