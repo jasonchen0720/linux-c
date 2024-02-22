@@ -97,12 +97,18 @@ __asm__ (
 	".globl co_switch                       \n"
 	".type	co_switch, %function            \n"
 	"co_switch:                             \n"
-	"       push {r0, r14}                  \n"
+	"       push {r14}                      \n"
+#if !defined(__argoverstack__)
+	"       push {r0}                       \n"
+#endif
 	"       stmfd r13!, {r4-r11}            \n" /* push {r4-r11} */
 	"       str r13, [r0]                   \n"
 	"       ldr r13, [r1]                   \n"
 	"       ldmfd r13!, {r4-r11}            \n" /* pop {r4-r11} */
-	"       pop {r0, r15}                   \n"
+#if !defined(__argoverstack__)
+	"       pop {r0}                        \n"
+#endif
+	"       pop {r15}                       \n"
 );
 #else
 	#error "Not supported on this arch."
@@ -254,9 +260,22 @@ static void co_dummy_ret()
 static void co_entry(struct co_struct *co)
 {
 #if defined(__argoverstack__)
-	LOG("co@%p enter.", co);
+	LOG("enter co@%p.", co);
 	#if defined(__x86_64__)
 	__asm__ volatile("movq -8(%%rbp), %0;" : "=r"(co));
+	#elif defined(__arm__)
+	void *r = NULL;
+#if defined(__thumb__)
+	__asm__ volatile("mov %0, r7" : "=r"(r));
+	__asm__ volatile("ldr %0, [r7, #-4]" : "=r"(co));
+
+	LOG("debug R7@%p.", r);
+#else
+	__asm__ volatile("mov %0, fp" : "=r"(r));
+	__asm__ volatile("ldr %0, [fp, #-4]" : "=r"(co));
+	
+	LOG("debug FP@%p.", r);
+#endif
 	#endif
 #endif
 	LOG("co@%p ID[%ld] running.", co, co->id);
@@ -334,29 +353,39 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine
 	#endif
 #elif defined(__arm__)
 	/*
-	 *	new_stack[-1] = lr
-	 *	new_stack[-2] = r0
-	 *	new_stack[-3] = r4
-	 *	new_stack[-4] = r5 
-	 *	new_stack[-5] = r6 
-	 *	new_stack[-6] = r7
-	 *	new_stack[-7] = r8 
-	 *	new_stack[-8] = r9
-	 *	new_stack[-9] = r10
-	 *	new_stack[-10]= r11
+	 *	new_stack[-3] = r11
+	 *	new_stack[-4] = r10
+	 *	new_stack[-5] = r9
+	 *	new_stack[-6] = r8
+	 *	new_stack[-7] = r7 
+	 *	new_stack[-8] = r6
+	 *	new_stack[-9] = r5
+	 *	new_stack[-10]= r4
 	 *
+	 */
+	#if defined(__argoverstack__)
+	/*
+	 *	new_stack[-1] = arg --> co
+	 *	new_stack[-2] = lr  --> co_entry
+	 */
+	new_stack[-1] = (void *)co;
+	new_stack[-2] = (void *)co_entry;
+	new_stack[-3] = (void *)(void *)new_stack;
+	#else
+	/*
+	 *	new_stack[-1] = lr  --> co_entry
+	 *	new_stack[-2] = co  --> co
 	 */
 	new_stack[-1] = (void *)co_entry;
 	new_stack[-2] = (void *)co;
+	#endif
 	/* 
 	 * FP(Frame pointer):
 	 *  				Thumb: r7
 	 *					ARM  : r11
 	 */
 	#if defined(__thumb__)
-	new_stack[-6] = (void *)(void *)new_stack;
-	#else
-	new_stack[-10]= (void *)(void *)new_stack;
+	new_stack[-7] = (void *)(void *)new_stack;
 	#endif
 	co->context.sp  = (void *)new_stack - (10 * sizeof(void *));
 #else
