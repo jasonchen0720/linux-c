@@ -40,7 +40,7 @@ DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := $(JC_WORK_DIR)/lib/common/libcommon.a
 
-USER_OBJS += $(JC_WORK_DIR)/lib/timer/libtm.a
+USER_OBJS += $(JC_WORK_DIR)/lib/timer/libtmr.a
 USER_OBJS += $(JC_WORK_DIR)/lib/tree/libtree.a
 
 LIBS := -lpthread

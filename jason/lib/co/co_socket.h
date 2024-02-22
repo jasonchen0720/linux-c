@@ -2,7 +2,7 @@
 #define __CO_SOCKET_H__
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "co_define.h"
+#include "co_type.h"
 struct co_sock 
 {
 	struct co_struct co;

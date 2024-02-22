@@ -2,13 +2,13 @@
 #include <errno.h>
 #include <unistd.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <sys/epoll.h>
 
+#include "co_core.h"
 #include "co_log.h"
+#include "co_epoll.h"
 #include "co_socket.h"
+
 #include "mem_pool.h"
 #define SK_MAX_EVENTS	1024
 struct sk_epoll
@@ -62,51 +62,17 @@ static int sock_options(int sockfd)
 	}
 	return 0;
 }
-static int sock_epoll(struct co_struct *co, uint32_t evt)
+static inline int sock_epoll(struct co_struct *co, uint32_t evt)
 {
-	struct epoll_event ev;
-
-	struct co_sock *sock = co->arg;
-	
-	ev.events 	= evt | EPOLLERR | EPOLLHUP;
-	ev.data.ptr = co;
-
-	epoll_ctl(sock_epfd(co->scheduler), EPOLL_CTL_ADD, sock->sockfd, &ev);
-
-	LOG("co@%p yield.", co);
-	co_yield(co);
-	LOG("co@%p resume.", co);
-	
-	epoll_ctl(sock_epfd(co->scheduler), EPOLL_CTL_DEL, sock->sockfd, &ev);
-	return 0;
+	return co_epoll(co, sock_epfd(co->scheduler), sock_skfd(co), evt | EPOLLERR | EPOLLHUP, -1);
+		
 }
-static int sock_schedule(struct co_scheduler *scheduler, int64_t usectmo)
+static int sock_schedule(struct co_scheduler *scheduler)
 {
-	int ret;
-	struct co_struct *co;
-	struct sk_epoll  *sk = scheduler->priv;
-	do {
-		LOG("epoll wait %lld us....", usectmo);
-		ret = epoll_wait(sk->epfd, sk->events, SK_MAX_EVENTS, usectmo < 0 ? -1 : (usectmo + 500) / 1000);
-		if (ret > 0) {
-			int n = 0;
-			for (n = 0; n < ret; n++) {
-				co = sk->events[n].data.ptr;
-				LOG("sockfd:%d.", sock_skfd(co));
-				LOG("resume co@%p.", co);
-				co_resume(co);
-			}
-			return n;
-		} else if (ret == 0) {
-			LOG("epoll timedout: %lld", usectmo);
-			return 0;
-		} else if (errno == EINTR) {
-			continue;
-		}
-		LOG("epollt ret: %d errno: %d", ret, errno);
-		return -1;
-	} while (1);
+	struct sk_epoll *sk = scheduler->priv;
+	return co_epoll_schedule(scheduler, sk->epfd, sk->events, SK_MAX_EVENTS);	
 }
+
 int co_socket(int domain, int type, int protocol)
 {
 	int sock = socket(domain, type, protocol);

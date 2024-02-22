@@ -5,7 +5,7 @@ include $(JC_WORK_DIR)/cflags.mk
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libtm.a
+STATIC_LIBS := libtmr.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=

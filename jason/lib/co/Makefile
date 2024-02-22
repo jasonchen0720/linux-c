@@ -13,7 +13,7 @@ SHARED_LIBS :=
 SRCS :=
 
 CFLAGS +=
-CFLAGS += -D__x64_argoverstack__
+CFLAGS += -D__argoverstack__
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
@@ -25,6 +25,7 @@ IFLAGS := \
 # All of the sources participating in the build are defined here
 SRCS += \
 ./co_core.c \
+./co_epoll.c \
 ./co_socket.c
 
 %.o: ./%.c

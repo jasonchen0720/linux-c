@@ -6,8 +6,10 @@
 #include <string.h>
 
 #include "co_log.h"
+#include "co_core.h"
 #include "co_socket.h"
-
+#undef  LOG_TAG
+#define LOG_TAG "co-sample"
 static struct co_struct 	coroutine;
 static struct co_scheduler 	scheduler;
 static void func(struct co_struct *c)
@@ -54,7 +56,7 @@ static void server_proc(struct co_struct *co)
 		
 		LOG("Recvd from client: <-- %s", buf);
 
-		co_sleep(co, 3 * 1000 * 1000);
+		co_sleep(co, 1000 * 1000);
 		
 		size_t s = sprintf(buf, "Message from Jay Chan at %ld", (long)time(NULL));
 	    send(sock->sockfd, buf, s, 0);
