@@ -9,31 +9,31 @@
 #include "co_log.h"
 #include "co_type.h"
 
-#define CO_MAX_STACKSIZE	(16 * 1024) 
+void co_switch(struct co_context *cur_ctx, struct co_context *new_ctx);
 
 #if defined(__i386__)
 /*
  * x86 callee save registers: ebp ebx edi esi 
  */
 __asm__ (
-	".text                                  \n"
-	".p2align 2,,3                          \n"
-	".globl co_switch                       \n"
-	".type	co_switch, @function            \n"
-	"co_switch:                             \n"
-	"       pushl %ebp                      \n" /* save ebp */
-	"       pushl %ebx                      \n" /* save ebx */
-	"       pushl %edi                      \n" /* save edi */
-	"       pushl %esi                      \n" /* save esi */
-	"       movl 0x14(%esp), %edx           \n" /* @cur_ctx -> %edx*/
-	"       movl %esp, (%edx)               \n"
-	"       movl 0x18(%esp), %edx           \n" /* @new_ctx -> %edx*/
-	"       movl (%edx), %esp               \n"
-	"       popl %esi                       \n" /* restore esi */
-	"       popl %edi                       \n" /* restore edi */
-	"       popl %ebx                       \n" /* restore ebx */
-	"       popl %ebp                       \n" /* restore ebp */
-	"       ret                             \n"
+	".text                           \n"
+	".p2align 2,,3                   \n"
+	".globl co_switch                \n"
+	".type	co_switch, @function     \n"
+	"co_switch:                      \n"
+	"       pushl %ebp               \n" /* save ebp */
+	"       pushl %ebx               \n" /* save ebx */
+	"       pushl %edi               \n" /* save edi */
+	"       pushl %esi               \n" /* save esi */
+	"       movl 0x14(%esp), %edx    \n" /* @cur_ctx -> %edx*/
+	"       movl %esp, (%edx)        \n"
+	"       movl 0x18(%esp), %edx    \n" /* @new_ctx -> %edx*/
+	"       movl (%edx), %esp        \n"
+	"       popl %esi                \n" /* restore esi */
+	"       popl %edi                \n" /* restore edi */
+	"       popl %ebx                \n" /* restore ebx */
+	"       popl %ebp                \n" /* restore ebp */
+	"       ret                      \n"
 );
 
 #elif defined(__x86_64__)
@@ -41,32 +41,32 @@ __asm__ (
  * x64 callee save registers: rbp rbx r12 r13 r14 r15 
  */
 __asm__ (
-	".text                                  \n"
-	".p2align 4,,15                         \n"
-	".globl co_switch                       \n"
-	".type	co_switch, @function            \n"
-	"co_switch:                             \n"
+	".text                           \n"
+	".p2align 4,,15                  \n"
+	".globl co_switch                \n"
+	".type	co_switch, @function     \n"
+	"co_switch:                      \n"
 #if !defined(__argoverstack__)
-	"       pushq %rdi                      \n" /* Not really needed, just for initial arg */
+	"       pushq %rdi               \n" /* Not really needed, just for initial arg */
 #endif
-	"       pushq %rbp                      \n" /* save rbp */
-	"       pushq %rbx                      \n" /* save rbx */
-	"       pushq %r12                      \n" /* save r12 */
-	"       pushq %r13                      \n" /* save r13 */
-	"       pushq %r14                      \n" /* save r14 */
-	"       pushq %r15                      \n" /* save r15 */
-	"       movq %rsp, (%rdi)               \n" /* @cur_ctx */
-	"       movq (%rsi), %rsp               \n" /* @new_ctx */
-	"       popq %r15                       \n" /* restore r15 */
-	"       popq %r14                       \n" /* restore r14 */
-	"       popq %r13                       \n" /* restore r13 */
-	"       popq %r12                       \n" /* restore r12 */
-	"       popq %rbx                       \n" /* restore rbx */
-	"       popq %rbp                       \n" /* restore rbp */
+	"       pushq %rbp               \n" /* save rbp */
+	"       pushq %rbx               \n" /* save rbx */
+	"       pushq %r12               \n" /* save r12 */
+	"       pushq %r13               \n" /* save r13 */
+	"       pushq %r14               \n" /* save r14 */
+	"       pushq %r15               \n" /* save r15 */
+	"       movq %rsp, (%rdi)        \n" /* @cur_ctx */
+	"       movq (%rsi), %rsp        \n" /* @new_ctx */
+	"       popq %r15                \n" /* restore r15 */
+	"       popq %r14                \n" /* restore r14 */
+	"       popq %r13                \n" /* restore r13 */
+	"       popq %r12                \n" /* restore r12 */
+	"       popq %rbx                \n" /* restore rbx */
+	"       popq %rbp                \n" /* restore rbp */
 #if !defined(__argoverstack__)
-	"       popq %rdi                       \n" /* Not really needed, just for initial arg */
+	"       popq %rdi                \n" /* Not really needed, just for initial arg */
 #endif
-	"       ret                             \n" 
+	"       retq                     \n" 
 );
 #elif defined(__arm__)
 /*
@@ -88,27 +88,27 @@ __asm__ (
  *
  */
 __asm__ (
-	".text                                  \n"
+	".text                           \n"
 #if defined(__thumb__)
-	".align 1                               \n"
+	".align 1                        \n"
 #else
-	".align 2                               \n"
+	".align 2                        \n"
 #endif
-	".globl co_switch                       \n"
-	".type	co_switch, %function            \n"
-	"co_switch:                             \n"
-	"       push {r14}                      \n"
+	".globl co_switch                \n"
+	".type	co_switch, %function     \n"
+	"co_switch:                      \n"
+	"       push {r14}               \n"
 #if !defined(__argoverstack__)
-	"       push {r0}                       \n"
+	"       push {r0}                \n"
 #endif
-	"       stmfd r13!, {r4-r11}            \n" /* push {r4-r11} */
-	"       str r13, [r0]                   \n"
-	"       ldr r13, [r1]                   \n"
-	"       ldmfd r13!, {r4-r11}            \n" /* pop {r4-r11} */
+	"       stmfd r13!, {r4-r11}     \n" /* push {r4-r11} */
+	"       str r13, [r0]            \n"
+	"       ldr r13, [r1]            \n"
+	"       ldmfd r13!, {r4-r11}     \n" /* pop {r4-r11} */
 #if !defined(__argoverstack__)
-	"       pop {r0}                        \n"
+	"       pop {r0}                 \n"
 #endif
-	"       pop {r15}                       \n"
+	"       pop {r15}                \n"
 );
 #else
 	#error "Not supported on this arch."
@@ -142,7 +142,6 @@ void co_state(struct co_struct *co, int state)
 	}
 	co->state = state;
 }
-int co_switch(struct co_context *cur_ctx, struct co_context *new_ctx);
 void co_yield(struct co_struct *co)
 {
 	assert(co->scheduler->runningco == co);
@@ -262,20 +261,12 @@ static void co_entry(struct co_struct *co)
 #if defined(__argoverstack__)
 	LOG("enter co@%p.", co);
 	#if defined(__x86_64__)
-	__asm__ volatile("movq -8(%%rbp), %0;" : "=r"(co));
+	__asm__ volatile("movq (%%rbp), %0;" : "=r"(co));
 	#elif defined(__arm__)
 	void *r = NULL;
-#if defined(__thumb__)
-	__asm__ volatile("mov %0, r7" : "=r"(r));
-	__asm__ volatile("ldr %0, [r7, #-4]" : "=r"(co));
-
-	LOG("debug R7@%p.", r);
-#else
 	__asm__ volatile("mov %0, fp" : "=r"(r));
-	__asm__ volatile("ldr %0, [fp, #-4]" : "=r"(co));
-	
+	__asm__ volatile("ldr %0, [fp]" : "=r"(co));
 	LOG("debug FP@%p.", r);
-#endif
 	#endif
 #endif
 	LOG("co@%p ID[%ld] running.", co, co->id);
@@ -286,17 +277,18 @@ static void co_entry(struct co_struct *co)
 	co_yield(co);
 }
 
-int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine)(struct co_struct *), void *arg)
+int co_init(struct co_struct *co, struct co_scheduler *scheduler, 
+			void (*routine)(struct co_struct *), void *arg, size_t stacksize)
 {
 	void *stack = NULL;
 	void **new_stack = NULL;
-	int err = posix_memalign(&stack, getpagesize(), CO_MAX_STACKSIZE);
+	int err = posix_memalign(&stack, getpagesize(), stacksize);
 	if (err) {
 		printf("Failed to allocate stack for new coroutine\n");
 		return -1;
 	}
 	
-	new_stack = (void **)(stack + CO_MAX_STACKSIZE);
+	new_stack = (void **)(stack + stacksize);
 
 	/* 
 	 * Below are register values stored on its stack, see co_switch()..
@@ -312,47 +304,55 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine
 	 * 		new_stack[-6] = %edi 
 	 * 		new_stack[-7] = %esi 
 	 */
-	new_stack[-1] = (void *)co;				/* arg */
-	new_stack[-2] = (void *)co_dummy_ret;	/* ret */
-	new_stack[-3] = (void *)co_entry;		/* eip */
-	new_stack[-4] = (void *)new_stack;		/* ebp */ /* new_stack[-4] = (void *)new_stack - (3 * sizeof(void*)); */
-	co->context.sp  = (void *)new_stack - (7 * sizeof(void *));
+	new_stack[-1]  = (void *)co;           /* arg */
+	new_stack[-2]  = (void *)co_dummy_ret; /* ret */
+	new_stack[-3]  = (void *)co_entry;     /* eip */
+	new_stack[-4]  = (void *)new_stack - (2 * sizeof(void *)); /* ebp */
+	co->context.sp = (void *)new_stack - (7 * sizeof(void *)); /* esp */
 #elif defined(__x86_64__)
 	#if defined(__argoverstack__)
 	/*
 	 *  x86_64 :
 	 *      new_stack[-1] = arg
-	 * 		new_stack[-2] = eip
+	 *      new_stack[-2] = eip
 	 *      new_stack[-3] = %rbp
-	 * 		new_stack[-4] = %rbx 
-	 * 		new_stack[-5] = %r12 
-	 * 		new_stack[-6] = %r13 
-	 * 		new_stack[-7] = %r14 
-	 * 		new_stack[-8] = %r15 
+	 *      new_stack[-4] = %rbx 
+	 * 	    new_stack[-5] = %r12 
+	 * 	    new_stack[-6] = %r13 
+	 * 	    new_stack[-7] = %r14 
+	 * 	    new_stack[-8] = %r15 
 	 */
-	new_stack[-1] = (void *)co;				/* arg */
-	new_stack[-2] = (void *)co_entry;		/* eip */
-	new_stack[-3] = (void *)new_stack;		/* rbp */ /* new_stack[-3] = (void *)new_stack - (2 * sizeof(void*)); */
-	co->context.sp  = (void *)new_stack - (8 * sizeof(void *));
+	new_stack[-1]  = (void *)co;       /* arg */
+	new_stack[-2]  = (void *)co_entry; /* eip */
+	new_stack[-3]  = (void *)new_stack - (1 * sizeof(void *)); /* rbp */
+	co->context.sp = (void *)new_stack - (8 * sizeof(void *)); /* rsp */
 	#else
 	/*
 	 *  x86_64 :
 	 *      new_stack[-1] = eip
-	 * 		new_stack[-2] = %rdi <- arg
+	 * 	    new_stack[-2] = %rdi <- arg
 	 *      new_stack[-3] = %rbp
-	 * 		new_stack[-4] = %rbx 
-	 * 		new_stack[-5] = %r12 
-	 * 		new_stack[-6] = %r13 
-	 * 		new_stack[-7] = %r14 
-	 * 		new_stack[-8] = %r15 
+	 * 	    new_stack[-4] = %rbx 
+	 * 	    new_stack[-5] = %r12 
+	 * 	    new_stack[-6] = %r13 
+	 * 	    new_stack[-7] = %r14 
+	 * 	    new_stack[-8] = %r15 
 	 */
-	new_stack[-1] = (void *)co_entry;		/* eip */
-	new_stack[-2] = (void *)co; 			/* rdi */
-	new_stack[-3] = (void *)new_stack;		/* rbp */ /* new_stack[-3] = (void *)new_stack - (1 * sizeof(void*)); */
-	co->context.sp  = (void *)new_stack - (8 * sizeof(void *));
+	new_stack[-1]  = (void *)co_entry;		/* eip */
+	new_stack[-2]  = (void *)co; 			/* rdi */
+	new_stack[-3]  = (void *)new_stack;		/* rbp */
+	co->context.sp = (void *)new_stack - (8 * sizeof(void *));
 	#endif
 #elif defined(__arm__)
 	/*
+	 *  __argoverstack__:
+	 *	new_stack[-1] = arg --> co
+	 *	new_stack[-2] = lr  --> co_entry
+	 *
+	 *  __argoverregister__:
+	 *	new_stack[-1] = lr  --> co_entry
+	 *	new_stack[-2] = co  --> r0
+	 *
 	 *	new_stack[-3] = r11
 	 *	new_stack[-4] = r10
 	 *	new_stack[-5] = r9
@@ -364,20 +364,13 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine
 	 *
 	 */
 	#if defined(__argoverstack__)
-	/*
-	 *	new_stack[-1] = arg --> co
-	 *	new_stack[-2] = lr  --> co_entry
-	 */
 	new_stack[-1] = (void *)co;
 	new_stack[-2] = (void *)co_entry;
-	new_stack[-3] = (void *)(void *)new_stack;
+	new_stack[-3] = (void *)new_stack - (1 * sizeof(void *));
 	#else
-	/*
-	 *	new_stack[-1] = lr  --> co_entry
-	 *	new_stack[-2] = co  --> co
-	 */
 	new_stack[-1] = (void *)co_entry;
 	new_stack[-2] = (void *)co;
+	new_stack[-3] = (void *)new_stack;
 	#endif
 	/* 
 	 * FP(Frame pointer):
@@ -385,7 +378,7 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine
 	 *					ARM  : r11
 	 */
 	#if defined(__thumb__)
-	new_stack[-7] = (void *)(void *)new_stack;
+	new_stack[-7] = new_stack[-3];
 	#endif
 	co->context.sp  = (void *)new_stack - (10 * sizeof(void *));
 #else
@@ -394,7 +387,7 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine
 	INIT_LIST_HEAD(&co->list);
 	co->id 			= scheduler->coid++;
 	co->scheduler 	= scheduler;
-	co->ssize		= CO_MAX_STACKSIZE;
+	co->ssize		= stacksize;
 	co->stack 		= stack;
 	co->arg			= arg;
 	co->routine		= routine;

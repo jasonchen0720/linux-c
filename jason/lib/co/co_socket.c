@@ -10,7 +10,8 @@
 #include "co_socket.h"
 
 #include "mem_pool.h"
-#define SK_MAX_EVENTS	1024
+#define SK_MAX_EVENTS		1024
+#define SK_CACHE_MAX_PAGES	2 
 struct sk_epoll
 {
 	int 			   epfd;
@@ -25,7 +26,7 @@ static struct mem_cache *	socket_cache = NULL;
 int sock_cache_init()
 {
 	size_t chunk_size  = sizeof(struct co_sock);
-	size_t chunk_count = mem_chunk_count(2, chunk_size);
+	size_t chunk_count = mem_chunk_count(SK_CACHE_MAX_PAGES, chunk_size);
 	
 	LOG("co: chunk_size: %lu, chunk_count: %lu", chunk_size, chunk_count);
 	
@@ -264,7 +265,7 @@ int co_socket_init()
 	return 0;
 }
 
-int co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv)
+int co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv, size_t stacksize)
 {
 	struct co_sock *sock = sock_cache_alloc();
 	if (sock == NULL)
@@ -273,7 +274,7 @@ int co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv)
 	sock->sockfd = sockfd;
 	sock->priv	 = priv;
 	
-	if (co_init(&sock->co, sock_sched(), func, sock) == -1) {
+	if (co_init(&sock->co, sock_sched(), func, sock, stacksize) == -1) {
 		sock_cache_free(sock);
 		return -1;
 	}

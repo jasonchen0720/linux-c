@@ -10,6 +10,7 @@
 #include "co_socket.h"
 #undef  LOG_TAG
 #define LOG_TAG "co-sample"
+#define CO_STACKSIZE	(16 * 1024)
 static struct co_struct 	coroutine;
 static struct co_scheduler 	scheduler;
 static void func(struct co_struct *c)
@@ -26,7 +27,7 @@ static void test()
 	LOG("co@%p test started.", c);
 	LOG("The program 1th enter.");
 	co_scheduler_init(s, NULL, NULL);
-	co_init(c, s, func, "hello world");
+	co_init(c, s, func, "hello world", CO_STACKSIZE);
 	co_resume(c);
 	LOG("The program 2th enter.");
 	co_resume(c);
@@ -56,7 +57,7 @@ static void server_proc(struct co_struct *co)
 		
 		LOG("Recvd from client: <-- %s", buf);
 
-		co_sleep(co, 1000 * 1000);
+		//co_sleep(co, 1000 * 1000);
 		
 		size_t s = sprintf(buf, "Message from Jay Chan at %ld", (long)time(NULL));
 	    send(sock->sockfd, buf, s, 0);
@@ -79,7 +80,7 @@ static void server_func(struct co_struct *co)
 
 		LOG("accept return sockfd: %d from %s", sockfd, inet_ntoa(clit_addr.sin_addr));
 		
-		co_socket_exec(sockfd, server_proc, NULL);
+		co_socket_exec(sockfd, server_proc, NULL, CO_STACKSIZE);
 	}
 	co_socket_quit(sock);
 }
@@ -106,7 +107,7 @@ int main(int argc, char *argv[])
 	    bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
 	    listen(listenfd, 32);
 
-		if (co_socket_exec(listenfd, server_func, NULL) == -1) {
+		if (co_socket_exec(listenfd, server_func, NULL, CO_STACKSIZE) == -1) {
 			close(listenfd);
 			return -1;
 		}

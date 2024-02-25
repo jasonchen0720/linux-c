@@ -37,7 +37,7 @@ struct mem_stock
 	char 	start[0];
 } __attribute__((aligned(ALIGN)));
 
-static int stock_comparator(const struct rb_node *n1, const struct rb_node *n2)
+static int stock_compare(const struct rb_node *n1, const struct rb_node *n2)
 {
 	if (n1 > n2)
 		return 1;
@@ -46,7 +46,7 @@ static int stock_comparator(const struct rb_node *n1, const struct rb_node *n2)
 	else
 		return 0;
 }
-static int stock_searcher(const void *addr, const struct rb_node *n)
+static int stock_search(const void *addr, const struct rb_node *n)
 {
 	const struct mem_stock *stock = rb_entry(n, struct mem_stock, node);
 
@@ -61,7 +61,7 @@ static int stock_searcher(const void *addr, const struct rb_node *n)
 	else
 		return 0;
 }
-static void stock_printer(const struct rb_node *n)
+static void stock_print(const struct rb_node *n)
 {
 	if (n) 
 		printf(rb_is_red(n) ? "\033[31m%lx" : "\033[0m%lx", (unsigned long)n);
@@ -165,7 +165,7 @@ struct mem_cache * mem_cache_create(size_t chunk_count, size_t chunk_size)
 		return NULL;
 	}
 
-	rb_tree_init(tree, stock_comparator, stock_searcher, stock_printer);
+	rb_tree_init(tree, stock_compare, stock_search, stock_print);
 	
 	if (cache_init(cache, tree, chunk_count, chunk_size) == NULL) {
 		free(cache);
@@ -247,7 +247,7 @@ struct mem_pool *mem_pool_create(size_t start_size, size_t diff_size, size_t slo
 		return NULL;
 	}
 
-	rb_tree_init(&pool->stock_tree, stock_comparator, stock_searcher, stock_printer);
+	rb_tree_init(&pool->stock_tree, stock_compare, stock_search, stock_print);
 	
 	int i;
 	for (i = 0; i < slot_count; i++) {

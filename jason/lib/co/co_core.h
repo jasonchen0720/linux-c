@@ -2,7 +2,8 @@
 #define __CO_CORE_H__
 #include "co_type.h"
 
-int co_init(struct co_struct *co, struct co_scheduler *scheduler, void (*routine)(struct co_struct *), void *arg);
+int co_init(struct co_struct *co, struct co_scheduler *scheduler, 
+			void (*routine)(struct co_struct *), void *arg, size_t stacksize);
 int64_t co_time();
 int64_t co_nexttmo(struct co_scheduler *scheduler);
 /*
