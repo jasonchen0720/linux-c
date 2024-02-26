@@ -16,24 +16,24 @@ void co_switch(struct co_context *cur_ctx, struct co_context *new_ctx);
  * x86 callee save registers: ebp ebx edi esi 
  */
 __asm__ (
-	".text                           \n"
-	".p2align 2,,3                   \n"
-	".globl co_switch                \n"
-	".type	co_switch, @function     \n"
-	"co_switch:                      \n"
-	"       pushl %ebp               \n" /* save ebp */
-	"       pushl %ebx               \n" /* save ebx */
-	"       pushl %edi               \n" /* save edi */
-	"       pushl %esi               \n" /* save esi */
-	"       movl 0x14(%esp), %edx    \n" /* @cur_ctx -> %edx*/
-	"       movl %esp, (%edx)        \n"
-	"       movl 0x18(%esp), %edx    \n" /* @new_ctx -> %edx*/
-	"       movl (%edx), %esp        \n"
-	"       popl %esi                \n" /* restore esi */
-	"       popl %edi                \n" /* restore edi */
-	"       popl %ebx                \n" /* restore ebx */
-	"       popl %ebp                \n" /* restore ebp */
-	"       ret                      \n"
+	".text                        \n"
+	".p2align 2,,3                \n"
+	".globl co_switch             \n"
+	".type	co_switch, @function  \n"
+	"co_switch:                   \n"
+	"    pushl %ebp               \n" /* save ebp */
+	"    pushl %ebx               \n" /* save ebx */
+	"    pushl %edi               \n" /* save edi */
+	"    pushl %esi               \n" /* save esi */
+	"    movl 0x14(%esp), %edx    \n" /* @cur_ctx -> %edx*/
+	"    movl %esp, (%edx)        \n"
+	"    movl 0x18(%esp), %edx    \n" /* @new_ctx -> %edx*/
+	"    movl (%edx), %esp        \n"
+	"    popl %esi                \n" /* restore esi */
+	"    popl %edi                \n" /* restore edi */
+	"    popl %ebx                \n" /* restore ebx */
+	"    popl %ebp                \n" /* restore ebp */
+	"    ret                      \n"
 );
 
 #elif defined(__x86_64__)
@@ -41,32 +41,32 @@ __asm__ (
  * x64 callee save registers: rbp rbx r12 r13 r14 r15 
  */
 __asm__ (
-	".text                           \n"
-	".p2align 4,,15                  \n"
-	".globl co_switch                \n"
-	".type	co_switch, @function     \n"
-	"co_switch:                      \n"
+	".text                        \n"
+	".p2align 4,,15               \n"
+	".globl co_switch             \n"
+	".type	co_switch, @function  \n"
+	"co_switch:                   \n"
 #if !defined(__argoverstack__)
-	"       pushq %rdi               \n" /* Not really needed, just for initial arg */
+	"    pushq %rdi               \n" /* Not really needed, just for initial arg */
 #endif
-	"       pushq %rbp               \n" /* save rbp */
-	"       pushq %rbx               \n" /* save rbx */
-	"       pushq %r12               \n" /* save r12 */
-	"       pushq %r13               \n" /* save r13 */
-	"       pushq %r14               \n" /* save r14 */
-	"       pushq %r15               \n" /* save r15 */
-	"       movq %rsp, (%rdi)        \n" /* @cur_ctx */
-	"       movq (%rsi), %rsp        \n" /* @new_ctx */
-	"       popq %r15                \n" /* restore r15 */
-	"       popq %r14                \n" /* restore r14 */
-	"       popq %r13                \n" /* restore r13 */
-	"       popq %r12                \n" /* restore r12 */
-	"       popq %rbx                \n" /* restore rbx */
-	"       popq %rbp                \n" /* restore rbp */
+	"    pushq %rbp               \n" /* save rbp */
+	"    pushq %rbx               \n" /* save rbx */
+	"    pushq %r12               \n" /* save r12 */
+	"    pushq %r13               \n" /* save r13 */
+	"    pushq %r14               \n" /* save r14 */
+	"    pushq %r15               \n" /* save r15 */
+	"    movq %rsp, (%rdi)        \n" /* @cur_ctx */
+	"    movq (%rsi), %rsp        \n" /* @new_ctx */
+	"    popq %r15                \n" /* restore r15 */
+	"    popq %r14                \n" /* restore r14 */
+	"    popq %r13                \n" /* restore r13 */
+	"    popq %r12                \n" /* restore r12 */
+	"    popq %rbx                \n" /* restore rbx */
+	"    popq %rbp                \n" /* restore rbp */
 #if !defined(__argoverstack__)
-	"       popq %rdi                \n" /* Not really needed, just for initial arg */
+	"    popq %rdi                \n" /* Not really needed, just for initial arg */
 #endif
-	"       retq                     \n" 
+	"    retq                     \n" 
 );
 #elif defined(__arm__)
 /*
@@ -88,27 +88,27 @@ __asm__ (
  *
  */
 __asm__ (
-	".text                           \n"
+	".text                        \n"
 #if defined(__thumb__)
-	".align 1                        \n"
+	".align 1                     \n"
 #else
-	".align 2                        \n"
+	".align 2                     \n"
 #endif
-	".globl co_switch                \n"
-	".type	co_switch, %function     \n"
-	"co_switch:                      \n"
-	"       push {r14}               \n"
+	".globl co_switch             \n"
+	".type	co_switch, %function  \n"
+	"co_switch:                   \n"
+	"    push {r14}               \n"
 #if !defined(__argoverstack__)
-	"       push {r0}                \n"
+	"    push {r0}                \n"
 #endif
-	"       stmfd r13!, {r4-r11}     \n" /* push {r4-r11} */
-	"       str r13, [r0]            \n"
-	"       ldr r13, [r1]            \n"
-	"       ldmfd r13!, {r4-r11}     \n" /* pop {r4-r11} */
+	"    stmfd r13!, {r4-r11}     \n" /* push {r4-r11} */
+	"    str r13, [r0]            \n"
+	"    ldr r13, [r1]            \n"
+	"    ldmfd r13!, {r4-r11}     \n" /* pop {r4-r11} */
 #if !defined(__argoverstack__)
-	"       pop {r0}                 \n"
+	"    pop {r0}                 \n"
 #endif
-	"       pop {r15}                \n"
+	"    pop {r15}                \n"
 );
 #else
 	#error "Not supported on this arch."
@@ -259,14 +259,11 @@ static void co_dummy_ret()
 static void co_entry(struct co_struct *co)
 {
 #if defined(__argoverstack__)
-	LOG("enter co@%p.", co);
+	LOG("co argument: %p", co);
 	#if defined(__x86_64__)
 	__asm__ volatile("movq (%%rbp), %0;" : "=r"(co));
 	#elif defined(__arm__)
-	void *r = NULL;
-	__asm__ volatile("mov %0, fp" : "=r"(r));
 	__asm__ volatile("ldr %0, [fp]" : "=r"(co));
-	LOG("debug FP@%p.", r);
 	#endif
 #endif
 	LOG("co@%p ID[%ld] running.", co, co->id);
@@ -284,7 +281,7 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	void **new_stack = NULL;
 	int err = posix_memalign(&stack, getpagesize(), stacksize);
 	if (err) {
-		printf("Failed to allocate stack for new coroutine\n");
+		LOG("Failed to allocate stack for new coroutine");
 		return -1;
 	}
 	
@@ -296,13 +293,13 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 #if defined(__i386__)
 	/*
 	 *  i386 :
-	 *      new_stack[-1] = arg
-	 * 		new_stack[-2] = ret 
-	 * 		new_stack[-3] = eip
-	 *      new_stack[-4] = %ebp
-	 * 		new_stack[-5] = %ebx 
-	 * 		new_stack[-6] = %edi 
-	 * 		new_stack[-7] = %esi 
+	 *  new_stack[-1] = arg
+	 * 	new_stack[-2] = ret 
+	 * 	new_stack[-3] = eip
+	 *  new_stack[-4] = %ebp
+	 * 	new_stack[-5] = %ebx 
+	 * 	new_stack[-6] = %edi 
+	 * 	new_stack[-7] = %esi 
 	 */
 	new_stack[-1]  = (void *)co;           /* arg */
 	new_stack[-2]  = (void *)co_dummy_ret; /* ret */
@@ -313,14 +310,14 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	#if defined(__argoverstack__)
 	/*
 	 *  x86_64 :
-	 *      new_stack[-1] = arg
-	 *      new_stack[-2] = eip
-	 *      new_stack[-3] = %rbp
-	 *      new_stack[-4] = %rbx 
-	 * 	    new_stack[-5] = %r12 
-	 * 	    new_stack[-6] = %r13 
-	 * 	    new_stack[-7] = %r14 
-	 * 	    new_stack[-8] = %r15 
+	 *  new_stack[-1] = arg
+	 *  new_stack[-2] = eip
+	 *  new_stack[-3] = %rbp
+	 *  new_stack[-4] = %rbx 
+	 *  new_stack[-5] = %r12 
+	 *  new_stack[-6] = %r13 
+	 *  new_stack[-7] = %r14 
+	 *  new_stack[-8] = %r15 
 	 */
 	new_stack[-1]  = (void *)co;       /* arg */
 	new_stack[-2]  = (void *)co_entry; /* eip */
@@ -329,14 +326,14 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	#else
 	/*
 	 *  x86_64 :
-	 *      new_stack[-1] = eip
-	 * 	    new_stack[-2] = %rdi <- arg
-	 *      new_stack[-3] = %rbp
-	 * 	    new_stack[-4] = %rbx 
-	 * 	    new_stack[-5] = %r12 
-	 * 	    new_stack[-6] = %r13 
-	 * 	    new_stack[-7] = %r14 
-	 * 	    new_stack[-8] = %r15 
+	 *  new_stack[-1] = eip
+	 * 	new_stack[-2] = %rdi <- arg
+	 *  new_stack[-3] = %rbp
+	 *  new_stack[-4] = %rbx 
+	 *  new_stack[-5] = %r12 
+	 *  new_stack[-6] = %r13 
+	 *  new_stack[-7] = %r14 
+	 *  new_stack[-8] = %r15 
 	 */
 	new_stack[-1]  = (void *)co_entry;		/* eip */
 	new_stack[-2]  = (void *)co; 			/* rdi */
@@ -374,8 +371,8 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	#endif
 	/* 
 	 * FP(Frame pointer):
-	 *  				Thumb: r7
-	 *					ARM  : r11
+	 *     Thumb: r7
+	 *     ARM  : r11
 	 */
 	#if defined(__thumb__)
 	new_stack[-7] = new_stack[-3];
