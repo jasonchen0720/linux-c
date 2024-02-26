@@ -294,12 +294,12 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	/*
 	 *  i386 :
 	 *  new_stack[-1] = arg
-	 * 	new_stack[-2] = ret 
-	 * 	new_stack[-3] = eip
+	 *  new_stack[-2] = ret 
+	 *  new_stack[-3] = eip
 	 *  new_stack[-4] = %ebp
-	 * 	new_stack[-5] = %ebx 
-	 * 	new_stack[-6] = %edi 
-	 * 	new_stack[-7] = %esi 
+	 *  new_stack[-5] = %ebx 
+	 *  new_stack[-6] = %edi 
+	 *  new_stack[-7] = %esi 
 	 */
 	new_stack[-1]  = (void *)co;           /* arg */
 	new_stack[-2]  = (void *)co_dummy_ret; /* ret */
@@ -327,7 +327,7 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	/*
 	 *  x86_64 :
 	 *  new_stack[-1] = eip
-	 * 	new_stack[-2] = %rdi <- arg
+	 *  new_stack[-2] = %rdi <- arg
 	 *  new_stack[-3] = %rbp
 	 *  new_stack[-4] = %rbx 
 	 *  new_stack[-5] = %r12 
@@ -343,21 +343,21 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 #elif defined(__arm__)
 	/*
 	 *  __argoverstack__:
-	 *	new_stack[-1] = arg --> co
-	 *	new_stack[-2] = lr  --> co_entry
+	 *  new_stack[-1] = arg --> co
+	 *  new_stack[-2] = lr  --> co_entry
 	 *
 	 *  __argoverregister__:
-	 *	new_stack[-1] = lr  --> co_entry
-	 *	new_stack[-2] = co  --> r0
+	 *  new_stack[-1] = lr  --> co_entry
+	 *  new_stack[-2] = co  --> r0
 	 *
-	 *	new_stack[-3] = r11
-	 *	new_stack[-4] = r10
-	 *	new_stack[-5] = r9
-	 *	new_stack[-6] = r8
-	 *	new_stack[-7] = r7 
-	 *	new_stack[-8] = r6
-	 *	new_stack[-9] = r5
-	 *	new_stack[-10]= r4
+	 *  new_stack[-3] = r11
+	 *  new_stack[-4] = r10
+	 *  new_stack[-5] = r9
+	 *  new_stack[-6] = r8
+	 *  new_stack[-7] = r7 
+	 *  new_stack[-8] = r6
+	 *  new_stack[-9] = r5
+	 *  new_stack[-10]= r4
 	 *
 	 */
 	#if defined(__argoverstack__)
