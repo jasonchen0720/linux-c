@@ -9,6 +9,15 @@
 #include "co_log.h"
 #include "co_type.h"
 
+/*
+ * CO state queue
+ */
+#define stq_any(q)     (!list_empty(q))
+#define stq_init(q)    INIT_LIST_HEAD(q);
+#define stq_del(co)    list_del_init(&(co)->list)
+#define stq_add(co, q) list_add_tail(&(co)->list, q)
+#define stq_first(q)   list_first_entry(q, struct co_struct, list)
+
 void co_switch(struct co_context *cur_ctx, struct co_context *new_ctx);
 
 #if defined(__i386__)
@@ -120,12 +129,26 @@ int64_t co_time()
 	assert(clock_gettime(CLOCK_MONOTONIC, &ts) == 0);
 	return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
 }
-void co_state(struct co_struct *co, int state)
+int64_t co_nexttmo(struct co_scheduler *scheduler)
 {
-	list_del_init(&co->list);
+	struct rb_node * n = rb_first(&scheduler->sleep_tree);
+	if (n) {
+		struct co_struct * co = rb_entry(n, struct co_struct, sleep_node);
+		int64_t tmo = co->sleep_expired_time - co_time();
+		return tmo > 0 ? tmo : 0;
+	}
+	return -1;
+}
+
+/*
+ * co_transfer() - co state transfer.
+ */
+void co_transfer(struct co_struct *co, int state)
+{
+	stq_del(co);
 	switch (state) {
 	case CO_READY:
-		list_add_tail(&co->list, &co->scheduler->ready_list);
+		stq_add(co, &co->scheduler->readyq);
 		break;
 	case CO_RUNNING:
 		break;
@@ -133,7 +156,7 @@ void co_state(struct co_struct *co, int state)
 		break;
 	case CO_WAITING:
 	case CO_TIMEDWAIT:
-		list_add_tail(&co->list, &co->scheduler->waits_list);
+		stq_add(co, &co->scheduler->waitsq);
 		break;
 	case CO_EXITED:
 		break;
@@ -144,28 +167,22 @@ void co_state(struct co_struct *co, int state)
 }
 void co_yield(struct co_struct *co)
 {
+	TRACE(rolec, co, "co@%p yield.", co);
 	assert(co->scheduler->runningco == co);
 	co_switch(&co->context,	&co->scheduler->context);
 }
-void co_resume(struct co_struct *co)
-{
-	LOG("resume co@%p.", co);
-	co->scheduler->runningco = co;
-	co_state(co, CO_RUNNING);
-	co_switch(&co->scheduler->context, &co->context);
 
-	co->scheduler->runningco = NULL;
-}
 void co_sleep(struct co_struct *co, int64_t usec)
 {
+	TRACE(rolec, co, "co@%p sleep %lld us", co, usec);
 	assert(co->scheduler->runningco == co);
 	if (usec > 0) {
 		co->sleep_expired_time = co_time() + usec;
-		LOG("co@%p will sleep %lld us, expire at %lld", co, usec, co->sleep_expired_time);
+		TRACE(rolec, co, "will sleep %lld us, expire at %lld", usec, co->sleep_expired_time);
 		while (&co->sleep_node != rb_insert(&co->sleep_node, &co->scheduler->sleep_tree))
 			co->sleep_expired_time++;
 	}
-	co_state(co, CO_SLEEPING);
+	co_transfer(co, CO_SLEEPING);
 	co_yield(co);
 }
 
@@ -193,21 +210,10 @@ static void expt_print(const struct rb_node *n)
 	printf("\033[0m\n");
 }
 
-int64_t co_nexttmo(struct co_scheduler *scheduler)
-{
-	struct rb_node * n = rb_first(&scheduler->sleep_tree);
-	if (n) {
-		struct co_struct * co = rb_entry(n, struct co_struct, sleep_node);
-		int64_t tmo = co->sleep_expired_time - co_time();
-		return tmo > 0 ? tmo : 0;
-	}
-	return -1;
-}
-
 /*
  * schedule_expired - return next timeout duration
  */
-static void expired(struct co_scheduler *scheduler)
+static void expire(struct co_scheduler *scheduler)
 {
 	struct rb_node *n;
 	struct co_struct *co;
@@ -215,37 +221,58 @@ static void expired(struct co_scheduler *scheduler)
 		co = rb_entry(n, struct co_struct, sleep_node);
 		int64_t now = co_time();
 		int64_t dif = co->sleep_expired_time - now;
-		LOG("co@%p expired time: %lld, now: %lld, dif: %lld", co, co->sleep_expired_time, now, dif);
+		TRACE(roles, scheduler, "co@%p expired time: %lld, now: %lld, dif: %lld", co, co->sleep_expired_time, now, dif);
 		if (dif <= 0) {
 			rb_remove(n, &scheduler->sleep_tree);
-			co_state(co, CO_READY);
+			co_transfer(co, CO_READY);
 		}
 	}
 }
+
+static inline void release(struct co_struct *co)
+{
+	TRACE(roles, co->scheduler, "call scheduler->release(), co@%p exited.", co);
+	free(co->stack);
+	co->scheduler->release(co);
+}
+
 static void schedule(struct co_scheduler *scheduler)
 {
-	struct co_struct *co, *t;
-	list_for_each_entry_safe(co, t, &scheduler->ready_list, list) {
-		co_resume(co);
+	struct co_struct *co;
+	while (stq_any(&scheduler->readyq)) {
+		co = stq_first(&scheduler->readyq);
+		TRACE(roles, scheduler, "resume co@%p.", co);
+		co->scheduler->runningco = co;
+		co_transfer(co, CO_RUNNING);
+		co_switch(&co->scheduler->context, &co->context);
+		if (co->scheduler->runningco->state == CO_EXITED) {
+			release(co->scheduler->runningco);
+		}
+		co->scheduler->runningco = NULL;
 	}
 }
 
-int co_scheduler_init(struct co_scheduler *scheduler, int (*schedule)(struct co_scheduler *), void *priv)
+int co_scheduler_init(struct co_scheduler *scheduler, 
+		int  (*schedule)(struct co_scheduler *), void *priv, 
+		void (*release)(struct co_struct *))
 {	
-	INIT_LIST_HEAD(&scheduler->ready_list);
-	INIT_LIST_HEAD(&scheduler->waits_list);
-	scheduler->coid 		= 0L;
-	scheduler->runningco 	= NULL;
-	scheduler->priv			= priv;
-	scheduler->schedule		= schedule;
+	stq_init(&scheduler->readyq);
+	stq_init(&scheduler->waitsq);
+	scheduler->coid      = 0L;
+	scheduler->runningco = NULL;
+	scheduler->priv	     = priv;
+	scheduler->schedule  = schedule;
+	scheduler->release   = release;
 	rb_tree_init(&scheduler->sleep_tree, expt_compare, expt_search, expt_print);
 	return 0;
 }
 int co_scheduler_run(struct co_scheduler *scheduler)
 {
-	while (1) {
-		expired(scheduler);
+	while (stq_any(&scheduler->waitsq) || 
+		   stq_any(&scheduler->readyq) || rb_count(&scheduler->sleep_tree)) {
+		expire(scheduler);
 		schedule(scheduler);
+		TRACE(roles, scheduler, "calling scheduler->schedule()...");
 		scheduler->schedret = scheduler->schedule(scheduler);
 	}
 	return 0;
@@ -259,18 +286,19 @@ static void co_dummy_ret()
 static void co_entry(struct co_struct *co)
 {
 #if defined(__argoverstack__)
-	LOG("co argument: %p", co);
+	struct co_struct *arg = co;
 	#if defined(__x86_64__)
 	__asm__ volatile("movq (%%rbp), %0;" : "=r"(co));
 	#elif defined(__arm__)
 	__asm__ volatile("ldr %0, [fp]" : "=r"(co));
 	#endif
+	TRACE(rolec, co, "co argument: %p", arg);
 #endif
-	LOG("co@%p ID[%ld] running.", co, co->id);
+	TRACE(rolec, co, "co@%p ID[%ld] running.", co, co->id);
 	co->routine(co);
-	LOG("co@%p ID[%ld] exited.", co, co->id);
+	TRACE(rolec, co, "co@%p ID[%ld] exiting.", co, co->id);
 
-	co_state(co, CO_EXITED);
+	co_transfer(co, CO_EXITED);
 	co_yield(co);
 }
 
@@ -388,7 +416,7 @@ int co_init(struct co_struct *co, struct co_scheduler *scheduler,
 	co->stack 		= stack;
 	co->arg			= arg;
 	co->routine		= routine;
-	co_state(co, CO_READY);
+	co_transfer(co, CO_READY);
 	LOG("co@%p initialized, stack top: %p.", co, new_stack);
 	return 0;
 }

@@ -73,7 +73,12 @@ static int sock_schedule(struct co_scheduler *scheduler)
 	struct sk_epoll *sk = scheduler->priv;
 	return co_epoll_schedule(scheduler, sk->epfd, sk->events, SK_MAX_EVENTS);	
 }
-
+static void sock_release(struct co_struct *co)
+{
+	struct co_sock *sock = co->arg;
+	close(sock->sockfd);
+	sock_cache_free(sock);
+}
 int co_socket(int domain, int type, int protocol)
 {
 	int sock = socket(domain, type, protocol);
@@ -98,7 +103,7 @@ int  co_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 	retry:
 		sock = accept(sockfd, addr, addrlen);
 		if (sock == -1) {
-			LOG("accept sockfd:%d errno:%d.", sockfd, errno);
+			TRACE(rolec, sock_sched()->runningco, "accept sockfd:%d errno:%d.", sockfd, errno);
 			switch (errno) {
 			case EINTR:
 				goto retry;
@@ -126,7 +131,7 @@ int co_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 		ret = connect(sockfd, addr, addrlen);
 
 		if (ret < 0) {
-			LOG("connect errno:%d.", errno);
+			TRACE(rolec, sock_sched()->runningco, "connect errno:%d.", errno);
 			switch (errno) {
 			case EINTR:
 				continue;
@@ -153,7 +158,7 @@ ssize_t co_send(int sockfd, const void *buf, size_t len, int flags)
 		if (ret > 0) {
 			sent += ret;
 		} else if (ret < 0) {
-			LOG("send errno:%d.", errno);
+			TRACE(rolec, sock_sched()->runningco, "send errno:%d.", errno);
 			switch (errno) {
 			case EINTR:
 				continue;
@@ -181,7 +186,7 @@ ssize_t co_sendto(int sockfd, const void *buf, size_t len, int flags, const stru
 		if (ret > 0) {
 			sent += ret;	
 		} else if (ret < 0) {
-			LOG("sendto errno:%d.", errno);
+			TRACE(rolec, sock_sched()->runningco, "sendto errno:%d.", errno);
 			switch (errno) {
 			case EINTR:
 				continue;
@@ -209,7 +214,7 @@ ssize_t co_recv(int sockfd, void *buf, size_t len, int flags)
 		ssize_t rcvd = recv(sockfd, buf, len, flags);
 
 		if (rcvd < 0) {
-			LOG("recv errno:%d.", errno);
+			TRACE(rolec, sock_sched()->runningco, "recv errno:%d.", errno);
 			switch (errno) {
 			case EINTR:
 				continue;
@@ -232,7 +237,7 @@ ssize_t co_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockadd
 		ssize_t rcvd = recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 
 		if (rcvd < 0) {
-			LOG("recvfrom errno:%d.", errno);
+			TRACE(rolec, sock_sched()->runningco, "recvfrom errno:%d.", errno);
 			switch (errno) {
 			case EINTR:
 				continue;
@@ -246,7 +251,6 @@ ssize_t co_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockadd
 		return rcvd;
 	} while (1);
 }
-
 int co_socket_init()
 {
 	struct sk_epoll *epoll = &socket_epoll;
@@ -260,7 +264,7 @@ int co_socket_init()
 		close(epoll->epfd);
 		return -1;
 	}
-	co_scheduler_init(sock_sched(), sock_schedule, epoll);
+	co_scheduler_init(sock_sched(), sock_schedule, epoll, sock_release);
 	
 	return 0;
 }
@@ -279,11 +283,6 @@ int co_socket_exec(int sockfd, void (*func)(struct co_struct *), void *priv, siz
 		return -1;
 	}
 	return 0;
-}
-void co_socket_quit(struct co_sock *sock)
-{
-	close(sock->sockfd);
-	sock_cache_free(sock);
 }
 int co_socket_run()
 {

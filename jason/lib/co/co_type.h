@@ -61,13 +61,14 @@ struct co_scheduler
 	 *           0: timeout
 	 *          >0: success
 	 */
-	int (*schedule)(struct co_scheduler *);
+	int  (*schedule)(struct co_scheduler *);
+	void (*release)(struct co_struct *);
 	//void (*resume)(struct co_struct *);
 	//void (*yield) (struct co_struct *);
 	struct co_context 	 	context;
 	struct co_struct	   *runningco;
 	struct rb_tree 			sleep_tree;
-	struct list_head 		waits_list;
-	struct list_head 		ready_list;
+	struct list_head 		waitsq;
+	struct list_head 		readyq;
 };
 #endif

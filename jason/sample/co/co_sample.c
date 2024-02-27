@@ -11,29 +11,6 @@
 #undef  LOG_TAG
 #define LOG_TAG "co-sample"
 #define CO_STACKSIZE	(16 * 1024)
-static struct co_struct 	coroutine;
-static struct co_scheduler 	scheduler;
-static void func(struct co_struct *c)
-{
-	LOG("The program 1th enter.");
-	LOG("co@%p  arg:%s", c, (const char *)c->arg);
-	co_yield(c);
-	LOG("The program 2th enter.");
-}
-static void test()
-{
-	struct co_struct 	*c = &coroutine;
-	struct co_scheduler *s = &scheduler;
-	LOG("co@%p test started.", c);
-	LOG("The program 1th enter.");
-	co_scheduler_init(s, NULL, NULL);
-	co_init(c, s, func, "hello world", CO_STACKSIZE);
-	co_resume(c);
-	LOG("The program 2th enter.");
-	co_resume(c);
-	LOG("The program 3th enter.");
-	LOG("co@%p test exited.", c);
-}
 
 #define socket(a, b, c)		co_socket(a, b, c)
 #define accept(a, b, c)		co_accept(a, b, c) 
@@ -46,7 +23,7 @@ static void server_proc(struct co_struct *co)
 {
 	char buf[1024];
 	struct co_sock *sock = co->arg;
-	LOG("recv co@%p enter, sockfd: %d", co, sock->sockfd);
+	TRACE(rolec, co, "recv enter, sockfd: %d", sock->sockfd);
 	do {
 		ssize_t rcvd = recv(sock->sockfd, buf, sizeof(buf), 0);
 
@@ -55,15 +32,14 @@ static void server_proc(struct co_struct *co)
 
 		buf[rcvd] = '\0';
 		
-		LOG("Recvd from client: <-- %s", buf);
+		TRACE(rolec, co, "Recvd from client: <-- %s", buf);
 
 		//co_sleep(co, 1000 * 1000);
 		
 		size_t s = sprintf(buf, "Message from Jay Chan at %ld", (long)time(NULL));
 	    send(sock->sockfd, buf, s, 0);
 	} while (1);
-	LOG("recv co@%p exit, sockfd: %d", co, sock->sockfd);
-	co_socket_quit(sock);
+	TRACE(rolec, co, "recv exit, sockfd: %d", sock->sockfd);
 }
 
 static void server_func(struct co_struct *co)
@@ -74,48 +50,42 @@ static void server_func(struct co_struct *co)
 
 	struct co_sock *sock = co->arg;
 
-	LOG("accept from listening sockfd: %d co@%p...", sock->sockfd, co);
+	TRACE(rolec, co, "accept from listening sockfd: %d", sock->sockfd);
 	for (;;) {
 		int sockfd = accept(sock->sockfd, (struct sockaddr *)&clit_addr, &client_len);
 
-		LOG("accept return sockfd: %d from %s", sockfd, inet_ntoa(clit_addr.sin_addr));
+		TRACE(rolec, co, "accept return sockfd: %d from %s", sockfd, inet_ntoa(clit_addr.sin_addr));
 		
 		co_socket_exec(sockfd, server_proc, NULL, CO_STACKSIZE);
 	}
-	co_socket_quit(sock);
 }
 
 int main(int argc, char *argv[])
 {
-	if (argc > 1 && strcmp(argv[1], "server") == 0) {
-		if (co_socket_init() == -1)
-			return -1;
-		
-	    int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (co_socket_init() == -1)
+		return -1;
+	
+    int listenfd = socket(AF_INET, SOCK_STREAM, 0);
 
-		if (listenfd == -1)
-			return -1;
-		
-	    struct sockaddr_in serv_addr;
-		
-	    memset(&serv_addr, 0, sizeof(serv_addr));
-	    
-	    serv_addr.sin_family 		= AF_INET;
-	    serv_addr.sin_port 			= htons(8080);
-	    serv_addr.sin_addr.s_addr 	= htonl(INADDR_ANY);
+	if (listenfd == -1)
+		return -1;
+	
+    struct sockaddr_in serv_addr;
+	
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    
+    serv_addr.sin_family 		= AF_INET;
+    serv_addr.sin_port 			= htons(8080);
+    serv_addr.sin_addr.s_addr 	= htonl(INADDR_ANY);
 
-	    bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-	    listen(listenfd, 32);
+    bind(listenfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
+    listen(listenfd, 32);
 
-		if (co_socket_exec(listenfd, server_func, NULL, CO_STACKSIZE) == -1) {
-			close(listenfd);
-			return -1;
-		}
-			
-		co_socket_run();
-	} else {
-		test();
+	if (co_socket_exec(listenfd, server_func, NULL, CO_STACKSIZE) == -1) {
+		close(listenfd);
+		return -1;
 	}
-	return 0;
+		
+	return co_socket_run();
 }
 

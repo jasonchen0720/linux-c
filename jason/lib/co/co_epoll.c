@@ -19,12 +19,12 @@ int co_epoll(struct co_struct *co, int epfd, int fd, uint32_t events,
 		while (&co->sleep_node != rb_insert(&co->sleep_node, &co->scheduler->sleep_tree))
 			co->sleep_expired_time++;
 		LOG("co@%p will wait %d ms, resume at %lld", co, timeout, co->sleep_expired_time);
-		co_state(co, CO_TIMEDWAIT);
+		co_transfer(co, CO_TIMEDWAIT);
 	} else
-		co_state(co, CO_WAITING);
-	LOG("co@%p yield.", co);
+		co_transfer(co, CO_WAITING);
+	
 	co_yield(co);
-	LOG("co@%p resume.", co);
+	TRACE(rolec, co, "co@%p resumed.", co);
 	
 	epoll_ctl(epfd, EPOLL_CTL_DEL, fd, &ev);
 	
@@ -49,20 +49,21 @@ int co_epoll_schedule(struct co_scheduler *scheduler, int epfd, struct epoll_eve
 {
 	do {
 		int tmo = co_epoll_nexttmo(scheduler);
+		TRACE(roles, scheduler, "epoll waiting..., timedout: %d.", tmo);
 		int ret = epoll_wait(epfd, events, maxevents, tmo);
 		if (ret > 0) {
 			int n = 0;
 			for (n = 0; n < ret; n++) {
-				co_resume((struct co_struct *)events[n].data.ptr);
+				co_transfer((struct co_struct *)events[n].data.ptr, CO_READY);
 			}
 			return n;
 		} else if (ret == 0) {
-			LOG("epoll %d ms timedout.", tmo);
+			TRACE(roles, scheduler, "epoll %d ms timedout.", tmo);
 			return 0;
 		} else if (errno == EINTR) {
 			continue;
 		} else {
-			LOG("epoll ret: %d errno: %d", ret, errno);
+			TRACE(roles, scheduler, "epoll ret: %d errno: %d", ret, errno);
 			return -1;
 		}
 	} while (1);
