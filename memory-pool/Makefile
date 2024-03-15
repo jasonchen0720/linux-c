@@ -1,27 +1,28 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libtree.a
+STATIC_LIBS := libmem-pool.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
 
 SRCS :=
 
-CFLAGS += 
+CFLAGS +=
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
+-I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/tree
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./bs_tree.c \
-./rb_tree.c
+./mem_pool.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'

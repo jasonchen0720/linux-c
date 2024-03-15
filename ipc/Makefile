@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
@@ -8,7 +8,7 @@ EXECUTABLES :=
 STATIC_LIBS := libipc.a
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS :=
+SHARED_LIBS := libipc.so
 
 SRCS :=
 
@@ -38,7 +38,7 @@ USER_OBJS :=
 
 LIBS :=
 
-SHARE_LIBS :=
+SHARE_LIBS := -lpthread
 
 SHARE_LDFLAGS :=
 

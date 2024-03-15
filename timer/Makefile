@@ -1,11 +1,11 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libco.a
+STATIC_LIBS := libtmr.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
@@ -13,20 +13,20 @@ SHARED_LIBS :=
 SRCS :=
 
 CFLAGS +=
-CFLAGS += -D__argoverstack__
 
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/lib/include \
--I$(JC_WORK_DIR)/lib/tree \
--I$(JC_WORK_DIR)/lib/memory-pool
+-I$(PROJECT_ROOT)/include \
+
+IFLAGS += -I$(PROJECT_ROOT)/tree
+ifeq ($(CONFIG_THREAD_POOL),y)
+IFLAGS += -I$(PROJECT_ROOT)/thread-pool
+endif
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./co_core.c \
-./co_epoll.c \
-./co_socket.c
+./timer.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'

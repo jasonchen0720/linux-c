@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := mcd
@@ -17,26 +17,23 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS :=
 
-LDFLAGS +=
+LDFLAGS += -L$(PROJECT_ROOT)/ipc
 # All of the sources participating in the build are defined here
 -include subdir.mk
 
 OBJS := $(C_SRCS:.c=.o)
 C_DEPS := $(C_SRCS:.c=.d)
 
-LIBS := -lpthread
+LIBS := -lipc -lpthread
 
 IFLAGS +=\
--I$(JC_WORK_DIR)/include \
--I$(JC_WORK_DIR)/lib/include \
--I$(JC_WORK_DIR)/lib/ipc \
+-I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/ipc \
 
 USER_OBJS :=
 
 USER_OBJS =\
-$(JC_WORK_DIR)/lib/ipc/libipc.a \
-$(JC_WORK_DIR)/lib/cfg/libcfg.a \
-$(JC_WORK_DIR)/lib/common/libcommon.a \
+$(PROJECT_ROOT)/common/libcommon.a \
 
 
 

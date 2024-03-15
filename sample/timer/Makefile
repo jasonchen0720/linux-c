@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := timer-sample
@@ -17,11 +17,10 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/include \
--I$(JC_WORK_DIR)/lib/include \
+-I$(PROJECT_ROOT)/include \
 
-IFLAGS += -I$(JC_WORK_DIR)/lib/tree
-IFLAGS += -I$(JC_WORK_DIR)/lib/timer
+IFLAGS += -I$(PROJECT_ROOT)/tree
+IFLAGS += -I$(PROJECT_ROOT)/timer
 
 #ld
 LDFLAGS +=
@@ -38,10 +37,10 @@ SRCS += timer_sample.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := $(JC_WORK_DIR)/lib/common/libcommon.a
+USER_OBJS := $(PROJECT_ROOT)/common/libcommon.a
 
-USER_OBJS += $(JC_WORK_DIR)/lib/timer/libtmr.a
-USER_OBJS += $(JC_WORK_DIR)/lib/tree/libtree.a
+USER_OBJS += $(PROJECT_ROOT)/timer/libtmr.a
+USER_OBJS += $(PROJECT_ROOT)/tree/libtree.a
 
 LIBS := -lpthread
 

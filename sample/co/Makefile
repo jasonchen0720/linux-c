@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := co-sample
@@ -17,15 +17,15 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/lib/include \
--I$(JC_WORK_DIR)/lib/tree \
--I$(JC_WORK_DIR)/lib/co
+-I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/tree \
+-I$(PROJECT_ROOT)/co
 
 #ld
 LDFLAGS +=
 
-LDFLAGS += -L$(JC_WORK_DIR)/lib/co/
-LDFLAGS += -L$(JC_WORK_DIR)/lib/tree/
+LDFLAGS += -L$(PROJECT_ROOT)/co/
+LDFLAGS += -L$(PROJECT_ROOT)/tree/
 # All of the sources participating in the build are defined here
 SRCS += ./co_sample.c
 
@@ -39,10 +39,10 @@ OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := \
-$(JC_WORK_DIR)/lib/co/libco.a \
-$(JC_WORK_DIR)/lib/tree/libtree.a \
-$(JC_WORK_DIR)/lib/memory-pool/libmem-pool.a \
-$(JC_WORK_DIR)/lib/common/libcommon.a
+$(PROJECT_ROOT)/co/libco.a \
+$(PROJECT_ROOT)/tree/libtree.a \
+$(PROJECT_ROOT)/memory-pool/libmem-pool.a \
+$(PROJECT_ROOT)/common/libcommon.a
 
 LIBS :=
 

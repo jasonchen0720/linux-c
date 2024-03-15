@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := broker
@@ -17,15 +17,14 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/include \
--I$(JC_WORK_DIR)/lib/include \
--I$(JC_WORK_DIR)/lib/ipc \
+-I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/ipc \
 
 #ld
 LDFLAGS +=
 
-LDFLAGS += -L$(JC_WORK_DIR)/lib/ipc
-LDFLAGS += -L$(JC_WORK_DIR)/lib-jc
+LDFLAGS += -L$(PROJECT_ROOT)/ipc
+LDFLAGS += -L$(PROJECT_ROOT)/lib
 # All of the sources participating in the build are defined here
 SRCS += \
 ./broker.c
@@ -40,12 +39,11 @@ OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := \
-$(JC_WORK_DIR)/lib/common/libcommon.a \
-$(JC_WORK_DIR)/lib/ipc/libipc.a \
-$(JC_WORK_DIR)/lib/tree/libtree.a \
-$(JC_WORK_DIR)/lib/thread-pool/libthread-pool.a
+$(PROJECT_ROOT)/common/libcommon.a \
+$(PROJECT_ROOT)/tree/libtree.a \
+$(PROJECT_ROOT)/thread-pool/libthread-pool.a
 
-LIBS := -ljc -lpthread
+LIBS := -ljay -lipc
 
 SHARE_LIBS :=
 

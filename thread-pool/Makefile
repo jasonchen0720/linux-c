@@ -1,11 +1,11 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libtmr.a
+STATIC_LIBS := libthread-pool.a
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
@@ -17,18 +17,11 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/lib/include \
-
-ifeq ($(CONFIG_TREE),y)
-IFLAGS += -I$(JC_WORK_DIR)/lib/tree
-endif
-ifeq ($(CONFIG_THREAD_POOL),y)
-IFLAGS += -I$(JC_WORK_DIR)/lib/thread-pool
-endif
+-I$(PROJECT_ROOT)/include
 
 # All of the sources participating in the build are defined here
 SRCS += \
-./timer.c
+./thread_pool.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'
@@ -39,9 +32,7 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := 
-
-
+USER_OBJS :=
 
 LIBS :=
 

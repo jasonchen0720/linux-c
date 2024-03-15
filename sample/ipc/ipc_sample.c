@@ -172,7 +172,7 @@ int main(int argc, char **argv)
 
 	char buf[1024] = {0};
 	unsigned long mask;
-	if (!strcmp(argv[0], "server")) {
+	if (!strcmp(argv[1], "server")) {
 	#if 0
 		pid_t pid = fork();
 
@@ -220,9 +220,9 @@ int main(int argc, char **argv)
 			printf("run error\n");
 			exit(-1);
 		}
-	} else if (!strcmp(argv[0], "client")) {
-		mask = strtoul(argv[1], NULL, 10);
-		const char *s = !strcmp(argv[2], "broker") ? IPC_BROKER : IPC_TEST;
+	} else if (!strcmp(argv[1], "client")) {
+		mask = strtoul(argv[2], NULL, 10);
+		const char *s = !strcmp(argv[3], "broker") ? IPC_BROKER : IPC_TEST;
 		struct ipc_subscriber *subscriber = ipc_subscriber_register(s, mask, NULL, 0, test_ipc_callback, NULL);
 
 		if (subscriber == NULL) {
@@ -234,9 +234,9 @@ int main(int argc, char **argv)
 			//ipcc_request_easy(IPC_TEST, 1003, test_seq2, sizeof(test_seq2), buf, 256);	
 		}
 
-	} else if (!strcmp(argv[0], "publisher")) {
-		mask = strtoul(argv[1], NULL, 10);
-		const char *s = !strcmp(argv[2], "broker") ? IPC_BROKER : IPC_TEST;
+	} else if (!strcmp(argv[1], "publisher")) {
+		mask = strtoul(argv[2], NULL, 10);
+		const char *s = !strcmp(argv[3], "broker") ? IPC_BROKER : IPC_TEST;
 		while (1) {
 			struct ipc_client *client = NULL;
 			client = ipc_client_create(s);

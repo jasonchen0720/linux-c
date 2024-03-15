@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES :=
@@ -17,7 +17,8 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/lib/include \
+-I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/tree \
 
 # All of the sources participating in the build are defined here
 SRCS += \
@@ -25,6 +26,11 @@ SRCS += \
 ./generic_bit.c \
 ./generic_file.c \
 ./generic_proc.c
+
+SRCS += \
+./ccl.c \
+./gcl.c \
+./scl.c
 
 %.o: ./%.c
 	@echo 'Building file: $<'

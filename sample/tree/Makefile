@@ -1,5 +1,5 @@
-include $(JC_WORK_DIR)/config.mk
-include $(JC_WORK_DIR)/cflags.mk
+include $(PROJECT_ROOT)/config.mk
+include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
 EXECUTABLES := tree-sample
@@ -17,8 +17,8 @@ CFLAGS +=
 # Every subdirectory with source files must be described here
 IFLAGS := \
 -I.\
--I$(JC_WORK_DIR)/lib/include \
--I$(JC_WORK_DIR)/lib/tree
+-I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/tree
 
 #ld
 LDFLAGS +=
@@ -36,9 +36,8 @@ OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := \
-$(JC_WORK_DIR)/lib/common/libcommon.a
-
-USER_OBJS += $(JC_WORK_DIR)/lib/cfg/libcfg.a $(JC_WORK_DIR)/lib/tree/libtree.a
+$(PROJECT_ROOT)/common/libcommon.a \
+$(PROJECT_ROOT)/tree/libtree.a
 
 LIBS :=
 
