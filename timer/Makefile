@@ -8,7 +8,7 @@ EXECUTABLES :=
 STATIC_LIBS := libtmr.a
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS :=
+SHARED_LIBS := libtmr.so
 
 SRCS :=
 
@@ -18,11 +18,6 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
-
-IFLAGS += -I$(PROJECT_ROOT)/tree
-ifeq ($(CONFIG_THREAD_POOL),y)
-IFLAGS += -I$(PROJECT_ROOT)/thread-pool
-endif
 
 # All of the sources participating in the build are defined here
 SRCS += \
@@ -37,13 +32,14 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := 
-
+USER_OBJS := \
+$(PROJECT_ROOT)/common/librbt.a \
+$(PROJECT_ROOT)/common/liblog.a
 
 
 LIBS :=
 
-SHARE_LIBS :=
+SHARE_LIBS := -lpthread
 
 SHARE_LDFLAGS :=
 

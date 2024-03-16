@@ -24,7 +24,7 @@ IFLAGS := \
 LDFLAGS +=
 
 LDFLAGS += -L$(PROJECT_ROOT)/ipc
-LDFLAGS += -L$(PROJECT_ROOT)/lib
+LDFLAGS += -L$(PROJECT_ROOT)/api
 # All of the sources participating in the build are defined here
 SRCS += ipc_sample.c
 
@@ -37,9 +37,9 @@ SRCS += ipc_sample.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-#USER_OBJS := $(PROJECT_ROOT)/common/libcommon.a $(PROJECT_ROOT)/ipc/libipc.a
+USER_OBJS :=
 
-LIBS := -ljay -lipc -lpthread
+LIBS := -lapi -lipc -lpthread
 
 SHARE_LIBS :=
 

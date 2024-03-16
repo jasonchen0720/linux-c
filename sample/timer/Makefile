@@ -19,11 +19,10 @@ IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
 
-IFLAGS += -I$(PROJECT_ROOT)/tree
 IFLAGS += -I$(PROJECT_ROOT)/timer
 
 #ld
-LDFLAGS +=
+LDFLAGS += -L$(PROJECT_ROOT)/timer
 
 # All of the sources participating in the build are defined here
 SRCS += timer_sample.c
@@ -37,12 +36,9 @@ SRCS += timer_sample.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := $(PROJECT_ROOT)/common/libcommon.a
+USER_OBJS :=
 
-USER_OBJS += $(PROJECT_ROOT)/timer/libtmr.a
-USER_OBJS += $(PROJECT_ROOT)/tree/libtree.a
-
-LIBS := -lpthread
+LIBS := -ltmr
 
 SHARE_LIBS :=
 

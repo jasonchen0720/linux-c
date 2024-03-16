@@ -8,7 +8,7 @@ EXECUTABLES :=
 STATIC_LIBS := libmem-pool.a
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS :=
+SHARED_LIBS := libmem-pool.so
 
 SRCS :=
 
@@ -18,7 +18,6 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
--I$(PROJECT_ROOT)/tree
 
 # All of the sources participating in the build are defined here
 SRCS += \
@@ -33,11 +32,11 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=
+USER_OBJS := $(PROJECT_ROOT)/common/liblog.a
 
 LIBS :=
 
-SHARE_LIBS :=
+SHARE_LIBS := -lpthread
 
 SHARE_LDFLAGS :=
 

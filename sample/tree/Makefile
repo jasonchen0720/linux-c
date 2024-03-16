@@ -18,7 +18,6 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
--I$(PROJECT_ROOT)/tree
 
 #ld
 LDFLAGS +=
@@ -35,9 +34,7 @@ SRCS += tree_sample.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := \
-$(PROJECT_ROOT)/common/libcommon.a \
-$(PROJECT_ROOT)/tree/libtree.a
+USER_OBJS := $(PROJECT_ROOT)/common/librbt.a
 
 LIBS :=
 

@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "ccl.h"
 #include "rb_tree.h"
 struct rb_data
 {
@@ -81,36 +80,9 @@ void rbt_test(int argc, char **argv)
 	printf("rb_count : %lu.\n", tree->rb_count);
 	
 }
-int bst_test(int argc,char **argv)
-{
-	struct ccl_t			config;
-	const struct ccl_pair 	*iter;
-
-	config.comment_char = '#';
-	config.sep_char = '=';
-	config.str_char = '"';
-
-	ccl_parse(&config, argv[0]);
-
-	while((iter = ccl_iterator(&config)) != 0) {
-		printf("(%s,%s)\n", iter->key, iter->value);
-	}
-	ccl_release(&config);
-
-	return 0;
-
-}
 
 int main(int argc,char **argv)
 {
-	if (argc < 2)
-		return -1;
-	printf("argv[0]:%s", argv[0]);
-	if (!strcmp(argv[0], "rbt"))
-		rbt_test(argc - 1, argv + 1);
-	else if (!strcmp(argv[0], "bst"))
-		bst_test(argc - 1, argv + 1);
-
-
+	rbt_test(argc - 1, argv + 1);
 	return 0;
 }

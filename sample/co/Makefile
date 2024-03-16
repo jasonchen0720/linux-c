@@ -18,14 +18,12 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
--I$(PROJECT_ROOT)/tree \
 -I$(PROJECT_ROOT)/co
 
 #ld
 LDFLAGS +=
 
-LDFLAGS += -L$(PROJECT_ROOT)/co/
-LDFLAGS += -L$(PROJECT_ROOT)/tree/
+LDFLAGS += -L$(PROJECT_ROOT)/co -L$(PROJECT_ROOT)/memory-pool
 # All of the sources participating in the build are defined here
 SRCS += ./co_sample.c
 
@@ -38,13 +36,9 @@ SRCS += ./co_sample.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := \
-$(PROJECT_ROOT)/co/libco.a \
-$(PROJECT_ROOT)/tree/libtree.a \
-$(PROJECT_ROOT)/memory-pool/libmem-pool.a \
-$(PROJECT_ROOT)/common/libcommon.a
+USER_OBJS :=
 
-LIBS :=
+LIBS := -lco
 
 SHARE_LIBS :=
 

@@ -24,7 +24,7 @@ IFLAGS := \
 LDFLAGS +=
 
 LDFLAGS += -L$(PROJECT_ROOT)/ipc
-LDFLAGS += -L$(PROJECT_ROOT)/lib
+LDFLAGS += -L$(PROJECT_ROOT)/api
 # All of the sources participating in the build are defined here
 SRCS += \
 ./broker.c
@@ -40,10 +40,9 @@ DEPS := $(SRCS:.c=.d)
 
 USER_OBJS := \
 $(PROJECT_ROOT)/common/libcommon.a \
-$(PROJECT_ROOT)/tree/libtree.a \
 $(PROJECT_ROOT)/thread-pool/libthread-pool.a
 
-LIBS := -ljay -lipc
+LIBS := -lapi -lipc
 
 SHARE_LIBS :=
 

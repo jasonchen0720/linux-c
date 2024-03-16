@@ -5,7 +5,7 @@ include $(PROJECT_ROOT)/cflags.mk
 EXECUTABLES :=
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS := libco.a
+STATIC_LIBS :=
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS := libco.so
@@ -19,7 +19,6 @@ CFLAGS += -D__argoverstack__
 IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
--I$(PROJECT_ROOT)/tree \
 -I$(PROJECT_ROOT)/memory-pool
 
 # All of the sources participating in the build are defined here
@@ -37,8 +36,10 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS := 
-
+USER_OBJS := \
+$(PROJECT_ROOT)/memory-pool/libmem-pool.a \
+$(PROJECT_ROOT)/common/librbt.a \
+$(PROJECT_ROOT)/common/liblog.a 
 
 
 LIBS :=

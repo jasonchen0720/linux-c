@@ -8,7 +8,7 @@ EXECUTABLES :=
 STATIC_LIBS := libthread-pool.a
 
 # shared lib name, e.g. libmylib.so
-SHARED_LIBS :=
+SHARED_LIBS := libthread-pool.so
 
 SRCS :=
 
@@ -32,7 +32,7 @@ SRCS += \
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=
+USER_OBJS := $(PROJECT_ROOT)/common/liblog.a
 
 LIBS :=
 
