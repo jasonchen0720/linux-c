@@ -19,15 +19,15 @@ int fd_lock(int fd)
 	lock.l_start = 0;
 	lock.l_len = 0;
 	lock.l_whence = SEEK_SET;
-  try_again: 
-	if (fcntl(fd, F_SETLKW, &lock) < 0) {
-		if (errno == EINTR) {
-			goto try_again;
-		}
-		return -1;
-	}
-	return 0;
+
+	int ret;
+	do {
+		ret = fcntl(fd, F_SETLKW, &lock);
+	} while (ret < 0 && errno == EINTR);
+	
+	return ret;
 }
+
 
 int fd_unlock(int fd) 
 {
@@ -36,15 +36,15 @@ int fd_unlock(int fd)
 	lock.l_start = 0;
 	lock.l_len = 0;
 	lock.l_whence = SEEK_SET;
-  try_again: 
-	if (fcntl(fd, F_SETLK, &lock) < 0)  {
-		if (errno == EINTR) {
-			goto try_again;
-		}
-		return -1;
-	}
-	return 0;
+
+	int ret;
+	do {
+		ret = fcntl(fd, F_SETLK, &lock);
+	} while (ret < 0 && errno == EINTR);
+	
+	return ret;
 }
+
 int sem_create(const char *path)
 {
     key_t key = ftok(path, 0x80);

@@ -13,6 +13,7 @@ export PATH=$BIN_DIR:$PATH
 
 function buildall() {
 	make
+	install -m 644 $PROJECT_ROOT/co/libco.so                   -D $LIB_DIR/libco.so
 	install -m 644 $PROJECT_ROOT/ipc/libipc.so                 -D $LIB_DIR/libipc.so
 	install -m 644 $PROJECT_ROOT/timer/libtmr.so               -D $LIB_DIR/libtmr.so
 	install -m 644 $PROJECT_ROOT/memory-pool/libmem-pool.so    -D $LIB_DIR/libmem-pool.so

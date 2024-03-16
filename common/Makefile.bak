@@ -1,9 +1,0 @@
-include $(PROJECT_ROOT)/config.mk
-
-all clean:
-	$(MAKE) -C ./log  $@
-	$(MAKE) -C ./rbt  $@
-	$(MAKE) -C ./bst  $@
-	$(MAKE) -C ./cfg  $@
-	$(MAKE) -C ./lock $@
-	$(MAKE) -C ./utils  $@
