@@ -2,51 +2,39 @@ include $(PROJECT_ROOT)/config.mk
 include $(PROJECT_ROOT)/cflags.mk
 
 # executable program name, e.g. myprog 
-EXECUTABLES := broker
+EXECUTABLES := mcd
 
 # static lib name, e.g. libmylib.a
-STATIC_LIBS :=
+STATIC_LIBS := 
 
 # shared lib name, e.g. libmylib.so
 SHARED_LIBS :=
 
-SRCS :=
+C_SRCS :=
 
 CFLAGS +=
 
 # Every subdirectory with source files must be described here
-IFLAGS := \
--I.\
+IFLAGS :=
+
+LDFLAGS += -L$(PROJECT_ROOT)/ipc
+# All of the sources participating in the build are defined here
+-include subdir.mk
+
+OBJS := $(C_SRCS:.c=.o)
+C_DEPS := $(C_SRCS:.c=.d)
+
+LIBS := -lipc -lpthread
+
+IFLAGS +=\
 -I$(PROJECT_ROOT)/include \
 -I$(PROJECT_ROOT)/ipc \
 
-#ld
-LDFLAGS +=
+USER_OBJS :=
 
-LDFLAGS += -L$(PROJECT_ROOT)/ipc
-LDFLAGS += -L$(PROJECT_ROOT)/api
-# All of the sources participating in the build are defined here
-SRCS += \
-./broker.c
+USER_OBJS += $(PROJECT_ROOT)/common/libcommon.a
 
-%.o: ./%.c
-	@echo 'Building file: $<'
-	$(CC) $(CFLAGS) $(IFLAGS) -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.o)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
-	@echo 'Finished building: $<'
-	@echo ' '
 
-OBJS := $(SRCS:.c=.o)
-DEPS := $(SRCS:.c=.d)
-
-USER_OBJS := \
-$(PROJECT_ROOT)/common/libcommon.a \
-$(PROJECT_ROOT)/thread-pool/libthread-pool.a
-
-LIBS := -lapi -lipc
-
-SHARE_LIBS :=
-
-SHARE_LDFLAGS :=
 
 # All Target
 all: $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
@@ -54,7 +42,7 @@ all: $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
 # Tool invocations
 $(EXECUTABLES): $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
-	$(CC) $(LDFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
+	$(CC) $(LDFLAGS) $(BOE_CFLAGS) -o $(EXECUTABLES) $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -68,12 +56,12 @@ $(STATIC_LIBS): $(OBJS) $(USER_OBJS)
 # Tool invocations
 $(SHARED_LIBS): $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
-	$(CC) $(SHARE_LDFLAGS) -shared -o $(SHARED_LIBS) $(OBJS) $(USER_OBJS) $(SHARE_LIBS)
+	$(CC) $(LDFLAGS) -shared -o $(SHARED_LIBS) $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo  ' '
 
 clean:
-	-$(RM) $(OBJS) $(DEPS) $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
+	-$(RM) $(OBJS) $(C_DEPS) $(EXECUTABLES) $(STATIC_LIBS) $(SHARED_LIBS)
 	-@echo ' '
 
 .PHONY: all clean

@@ -17,8 +17,6 @@ endif
 	$(MAKE) -C ./memory-pool  $@
 	$(MAKE) -C ./co  $@
 	$(MAKE) -C ./api $@
-	$(MAKE) -C ./broker $@
-	$(MAKE) -C ./mc $@
 	$(MAKE) -C ./sample $@
 	@echo -e '\n\033[32mMake $@ done!\033[0m\n'
 install:

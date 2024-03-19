@@ -21,7 +21,9 @@ function buildall() {
 	install -m 644 $PROJECT_ROOT/api/libapi.so                 -D $LIB_DIR/libapi.so
 	
 	install -m 755 -d $BIN_DIR
-	install -m 755 $PROJECT_ROOT/sample/*/*-sample             -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/sample/mc/mcd                 -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/sample/broker/broker          -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/sample/*-sample/*-sample      -D $BIN_DIR/
 }
 
 function buildclean() {
