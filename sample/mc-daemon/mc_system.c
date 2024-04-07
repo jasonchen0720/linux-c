@@ -137,7 +137,7 @@ static void sync_waiting(struct ipc_msg *msg, void *arg)
 	rsp->code = err ? MC_SYN_TMO : MC_SYN_DONE;
 	msg->data_len = sizeof(*rsp);
 }
-int mc_client_syn_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
+int mcd_client_syn_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
 {
 	if (ipc_class(msg) != IPC_CLASS_REQUESTER) 
 		return -1;
@@ -163,7 +163,7 @@ err:
 	return 0;
 }
 
-int mc_client_ack_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
+int mcd_client_ack_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
 {
 	if (ipc_class(msg) != IPC_CLASS_SUBSCRIBER)
 		return -1;
@@ -227,7 +227,7 @@ static void apply_waiting(struct ipc_msg *msg, void *arg)
 	msg->data_len = sizeof(*rsp);
 	rsp->approved = ret;
 }
-int mc_client_apply_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
+int mcd_client_apply_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
 {
 	if (ipc_class(msg) != IPC_CLASS_REQUESTER)
 		return -1;
@@ -255,7 +255,7 @@ err:
 	rsp->approved = MC_APPLY_R_ERR;
 	return 0;
 }
-int mc_client_vote_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
+int mcd_client_vote_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
 {
 	if (ipc_class(msg) != IPC_CLASS_SUBSCRIBER)
 		return -1;
@@ -308,7 +308,7 @@ static void reboot_waiting(struct ipc_msg *msg, void *arg)
 	mc_reboot(mc);
 }
 
-int mc_client_reboot_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
+int mcd_client_reboot_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
 {
 	if (ipc_class(msg) != IPC_CLASS_REQUESTER)
 		return -1;

@@ -28,7 +28,7 @@ int mc_exception_test_only(int e, struct mc_einfo *info)
 	return test_bit(e, info->exception);
 }
 
-int mc_client_exception_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
+int mcd_client_exception_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
 {
 	if (ipc_class(msg) != IPC_CLASS_SUBSCRIBER) {
 		LOGE("Bad exeception notification.");

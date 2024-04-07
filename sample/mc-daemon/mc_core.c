@@ -9,7 +9,8 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-
+#include <sys/wait.h>
+#include "mc_guard.h"
 #include "mc_system.h"
 #include "mc_watchdog.h"
 #include "mc_exception.h"
@@ -71,7 +72,7 @@ static void mc_kill_guard(struct mc_struct *mc)
 {
 	struct mc_guard *guard;
 	list_for_each_entry(guard, &mc->guard_head, list) {
-		if (mc_guard_inspect(guard) == 0) {
+		if (mc_process_validate(guard->name, guard->pid)) {
 			LOGP("System shutdown, Kill %s", guard->name);
 			kill(guard->pid, SIGKILL);
 		}
@@ -103,12 +104,13 @@ out:
 }
 static int mc_exit_client(struct mc_client *client)
 {
-	LOGI("Exit notify:%s.", client->name);
-	if (ipc_server_notify(client->subscriber->sevr, 
-							MC_GUARD_MASK, MC_IND_EXIT, NULL, 0) == 0)
-		client->flags |= BIT(MC_CLIENT_F_EXIT);
-	else
-		LOGE("Exit notify error.");
+	LOGI("Exit notify to client: %s, state: %d.", client->name, client->state);
+	if (client->state & MC_CLIENT_RUNNING) {
+		assert(client->subscriber);
+		if (ipc_server_notify(client->subscriber->sevr, MC_GUARD_MASK, MC_IND_EXIT, NULL, 0) == 0)
+			client->flags |= BIT(MC_CLIENT_F_EXIT);
+		else LOGE("Exit notify error.");
+	}
 	return 0;
 }
 static int device_reboot(struct ipc_timing *timing)
@@ -119,7 +121,7 @@ static int device_reboot(struct ipc_timing *timing)
 	return 0;
 }
 
-static int client_restart_review_timing(struct ipc_timing *timing)
+static int client_restart_review(struct ipc_timing *timing)
 {
 	struct mc_client *client = timing->arg;
 
@@ -137,22 +139,24 @@ static int client_restart_review_timing(struct ipc_timing *timing)
 	}
 	return 0;
 }
-static int client_restart_entry(struct ipc_timing *timing)
+static int client_restart(struct mc_client *client)
 {
-	struct mc_client *client = timing->arg;
-	LOGI("Restarting client:%s state:%d", client->name, client->state);
-	assert(client->state == MC_CLIENT_PRESTART);
-	if (mc_process_restart(client->name, client->cmdline) < 0)
+	pid_t pid = mc_process_restart(client->name, client->cmdline);
+	LOGI("Restarting client:%s state:%d pid:%d", client->name, client->state, pid);
+	if (pid < 0)
 		return -1;
+	/*
+	 * We don't set client->pid here as the peer will carry pid while doing register.
+	 */
 	set_client_state(client, MC_CLIENT_STARTING);
-	ipc_server_publish(IPC_TO_BROADCAST,
-	 					MC_SYNC_MASK, MC_IND_SYNC_RESTART, client->name, strlen(client->name) + 1);
-	ipc_timing_unregister(timing);
-	ipc_timing_init(&client->restart_timing, 1, client->latch_time, 0, 
-							client, client_restart_review_timing);
+	ipc_server_publish(IPC_TO_BROADCAST, MC_SYNC_MASK, MC_IND_SYNC_RESTART, client->name, strlen(client->name) + 1);
+	ipc_timing_init(&client->restart_timing, 1, client->latch_time, 0, client, client_restart_review);
 	ipc_timing_register(&client->restart_timing);
-	
 	return 0;
+}
+static int client_restart_delay(struct ipc_timing *timing)
+{
+	return client_restart((struct mc_client *)timing->arg);
 }
 static void mc_task_active(struct mc_task *task, struct mc_struct *mc)
 {
@@ -169,32 +173,35 @@ static void mc_task_active(struct mc_task *task, struct mc_struct *mc)
 	list_add_tail(&task->list, &task_tmp->list);
 	//list_for_each_entry(task_tmp, &mc->task_head, list) {LOGI("HT list %s:%ld", task_tmp->client->name, task_tmp->expire);}
 }
-static void mc_client_active(struct mc_client *client, struct mc_struct *mc, long probe_time)
+static void mcd_client_active(struct mc_client *client, struct mc_struct *mc, long probe_time)
 {
 	client->probe_expire = probe_time + mc->config->loss_max * mc->config->probe_interval;
 	
 	struct mc_client *client_tmp;
 	list_del(&client->list);
 	
-	list_for_each_entry(client_tmp, &mc->work_head, list) {
+	list_for_each_entry(client_tmp, &mc->client_runningq, list) {
 		//LOGI("Probe expire %s, interval:%d, delta:%ld - %ld", client->name, mc->config->probe_interval, client->probe_expire, client_tmp->probe_expire);
 		if (client->probe_expire >= client_tmp->probe_expire)
 			break;
 	}
 
 	list_add_tail(&client->list, &client_tmp->list);
-	//list_for_each_entry(client_tmp, &mc->work_head, list) {LOGI("Probe list %s:%ld", client_tmp->name, client_tmp->probe_expire);}
+	//list_for_each_entry(client_tmp, &mc->client_runningq, list) {LOGI("Probe list %s:%ld", client_tmp->name, client_tmp->probe_expire);}
 }
-static int mc_client_restart(struct mc_client *client, struct mc_struct *mc)
+static int mcd_client_restart(struct mc_client *client, int delay)
 {	
-	ipc_timing_init(&client->restart_timing, 1, mc->config->delay_restart, 0, 
-								client, client_restart_entry);
-	ipc_timing_register(&client->restart_timing);	
-	set_client_state(client, MC_CLIENT_PRESTART);
-	LOGI("%s will restart %ds later.", client->name, mc->config->delay_restart);
+	long mature_time = client->birth_time + client->latch_time;
+	if (mc_gettime() < mature_time) {
+		ipc_timing_init(&client->restart_timing, 0, delay, 0, client, client_restart_delay);
+		ipc_timing_register(&client->restart_timing);	
+		set_client_state(client, MC_CLIENT_PRESTART);
+		LOGI("%s will restart %ds later.", client->name, delay);
+	} else 
+		client_restart(client);
 	return 0;
 }
-static struct mc_client *mc_client_construct(
+static struct mc_client *mcd_client_construct(
 	struct mc_reginfo *reginfo, 
 	struct mc_subscriber *subscriber,
 	struct mc_struct *mc)
@@ -202,7 +209,7 @@ static struct mc_client *mc_client_construct(
 	int i;
 	struct mc_client *client = NULL;
 	
-	list_for_each_entry(client, &mc->dead_head, list) {
+	list_for_each_entry(client, &mc->client_deadq, list) {
 		if (!strcmp(reginfo->name, client->name) && 
 			!strcmp(reginfo->cmdline, client->cmdline) && reginfo->count == client->count) {
 			assert(client->tasks);
@@ -240,6 +247,7 @@ out:
 	client->pid		= reginfo->pid;
 	client->flags 	= 0;
 	client->subscriber = subscriber;
+	client->birth_time = mc_gettime();
 	for (i = 0; i < reginfo->count; i++) {	
 		client->tasks[i].tid 	  = reginfo->tasks[i].tid;
 		client->tasks[i].strategy = reginfo->tasks[i].strategy;
@@ -250,39 +258,54 @@ out:
 		LOGI("Register task(%s):%d, HT interval:%d, strategy:%d.", 
 			client->name, client->tasks[i].tid, client->tasks[i].interval, client->tasks[i].strategy);
 	}
-	mc_client_active(client, mc, mc->probe_time);
-	
+	mcd_client_active(client, mc, mc->probe_time);
 	set_client_state(client, MC_CLIENT_RUNNING);	
 	LOGI("Alloc Client done.");
 	return client;
 }
-static void mc_client_destroy(struct mc_client *client, struct mc_struct *mc)
+static void mcd_client_destroy(struct mc_client *client, struct mc_struct *mc)
 {
 	int i;
-	LOGI("Client destroy, state:%d.", client->state);
-
-	/* Delete from mc->loss_head or work_head or detach_head */
-	list_del(&client->list);
-	
-	for (i = 0; i < client->count; i++)
-		list_del_init(&client->tasks[i].list);
-	
-	if (client->guard)
-		clear_bit(client->guard->id, mc->ready->bitmap);
+	LOGI("Client destroy, state:%d.", client->state);	
 	if (client->flags & BIT(MC_CLIENT_F_UNREG)) {
-		if (client->guard && !(client->state & MC_CLIENT_DETACHED))
+		/* 
+		 * Delete from mc->client_lossq or client_runningq or client_detachdq 
+		 */
+		list_del(&client->list);
+		for (i = 0; i < client->count; i++)
+			list_del(&client->tasks[i].list);
+		if (client->guard) {
+			clear_bit(client->guard->id, mc->ready->bitmap);
+			client->guard->pid = client->pid;
+			client->guard->state = client->state & MC_CLIENT_DETACHED ? MC_GUARD_STATE_DETACH : MC_GUARD_STATE_NEW;
 			list_add_tail(&client->guard->list, &mc->guard_head);
+		}
 		free(client->tasks);
 		free(client);
 	} else {
+		for (i = 0; i < client->count; i++)
+			list_del_init(&client->tasks[i].list);
+		if (client->guard)
+			clear_bit(client->guard->id, mc->ready->bitmap);
 		client->flags 		= 0;	
 		client->pid 		= 0;
 		client->subscriber	= NULL;
-		set_client_state(client, MC_CLIENT_DEAD);
-		list_add_tail(&client->list, &mc->dead_head);
+		if (client->state & MC_CLIENT_DETACHED) {
+			LOGW("Detached client:%s dead.", client->name);
+			/*
+			 * Need to keep 'detached' state
+			 */
+			set_client_state(client, MC_CLIENT_DEAD | MC_CLIENT_DETACHED);
+		} else {
+			set_client_state(client, MC_CLIENT_DEAD);
+			/*
+			 * Move from mc->client_lossq or client_runningq to client_deadq 
+			 */
+			list_move(&client->list, &mc->client_deadq);
+		}
 	}
 }
-int mc_client_heartbeat_msg(struct ipc_msg *msg, void *cookie)
+int mcd_client_heartbeat_msg(struct ipc_msg *msg, void *cookie)
 {
 	struct mc_heartbeat *ht = (struct mc_heartbeat *)msg->data;
 	if (ipc_class(msg) != IPC_CLASS_SUBSCRIBER)
@@ -322,23 +345,23 @@ int mc_client_heartbeat_msg(struct ipc_msg *msg, void *cookie)
 	LOGE("Task not found.");
 	return -1;
 }
-int mc_client_probe_msg(struct ipc_msg *msg, void *cookie)
+int mcd_client_probe_msg(struct ipc_msg *msg, void *cookie)
 {
 	if (ipc_class(msg) == IPC_CLASS_SUBSCRIBER && 
 		ipc_cookie_type(cookie) == MC_IPC_COOKIE_CLIENT) {
 		struct mc_client *client = get_client_from_cookie(cookie);
 		assert(ipc_subscribed(client->subscriber->sevr, MC_GUARD_MASK));
-		struct mc_probem *probe = (struct mc_probem *)msg->data;
+		struct mc_probe *probe = (struct mc_probe *)msg->data;
 		if (client->state & MC_CLIENT_DETACHED) {
 			LOGH("Probe ack:%ld from detached client:%s", probe->time, client->name);
 			return 0;
 		}
-		mc_client_active(client, client->subscriber->mc, probe->time);
+		mcd_client_active(client, client->subscriber->mc, probe->time);
 		LOGH("Probe ack:%ld from client:%s", probe->time, client->name);
 	}
 	return 0;
 }
-int mc_client_ready_msg(struct ipc_msg *msg, void *cookie)
+int mcd_client_ready_msg(struct ipc_msg *msg, void *cookie)
 {
 	if (ipc_class(msg) == IPC_CLASS_SUBSCRIBER && 
 		ipc_cookie_type(cookie) == MC_IPC_COOKIE_CLIENT) {
@@ -356,7 +379,7 @@ int mc_client_ready_msg(struct ipc_msg *msg, void *cookie)
 	}
 	return -1;
 }
-int mc_client_exit_msg(struct ipc_msg *msg, void *cookie)
+int mcd_client_exit_msg(struct ipc_msg *msg, void *cookie)
 {
 	if (ipc_cookie_type(cookie) == MC_IPC_COOKIE_CLIENT) {
 		struct mc_client *client = get_client_from_cookie(cookie);
@@ -364,106 +387,153 @@ int mc_client_exit_msg(struct ipc_msg *msg, void *cookie)
 	}
 	return 0;
 }
-static int mc_client_attach(const char *name, int guard_id, struct mc_struct *mc)
+static int mcd_client_attach(const struct mc_detach *det, struct mc_struct *mc)
 {
-	struct mc_client *temp, *client = NULL;
-	list_for_each_entry(temp, &mc->detach_head, list) {
-		if (!strcmp(temp->name, name)) {
-			client = temp;
-			break;
+	struct mc_client *client = NULL;
+	list_for_each_entry(client, &mc->client_detachdq, list) {
+		if (!strcmp(client->name, det->name)) {
+			if (client->state & MC_CLIENT_RUNNING) {
+				int i;
+				for (i = 0; i < client->count; i++)
+					mc_task_active(&client->tasks[i], mc);
+				mcd_client_active(client, mc, mc->probe_time);
+				client->state &= ~MC_CLIENT_DETACHED;
+				LOGI("client running, detach state cleared.");
+				list_move(&client->list, &mc->client_runningq);
+			} else if (client->state & MC_CLIENT_DEAD) {
+				client->state &= ~MC_CLIENT_DETACHED;
+				list_move(&client->list, &mc->client_deadq);
+				mcd_client_restart(client, mc->config->delay_restart);
+				LOGI("client dead, restart directly.");
+			} else {
+				LOGE("client unexpected state: %d.", client->state);
+				return 0;
+			}
+			return 1;
 		}
 	}
-	if (client) {
-		int i;
-		for (i = 0; i < client->count; i++)
-			mc_task_active(&client->tasks[i], mc);
-		mc_client_active(client, mc, mc->probe_time);
-		set_client_state(client, MC_CLIENT_RUNNING);
-	} else {
-		struct mc_guard *guard = mc_guard_search(name);
-		if (guard && guard->id == guard_id) {
-			list_del(&guard->list);
-			list_add_tail(&guard->list, &mc->guard_head);
+	
+	struct mc_guard *guard;
+	list_for_each_entry(guard, &mc->guard_head, list) {
+		if (guard->state == MC_GUARD_STATE_DETACH && !strcmp(guard->name, det->name)) {
+			guard->state = MC_GUARD_STATE_NEW;
+			return 1;
 		}
 	}
+	LOGW("%s not found, attach failure.", det->name);
 	return 0;
 }
 
-static int mc_client_detach(const char *name, int guard_id, struct mc_struct *mc)
+static int mcd_client_detach(const struct mc_detach *det, struct mc_struct *mc)
 {
-	struct mc_client *temp, *client = NULL;
+	struct mc_client *client = NULL;
 	
-	list_for_each_entry(temp, &mc->work_head, list) {
-		if (!strcmp(temp->name, name)) {
-			client = temp;
-			break;
+	list_for_each_entry(client, &mc->client_runningq, list) {
+		if (!strcmp(client->name, det->name)) {
+			int i;
+			for (i = 0; i < client->count; i++)
+				list_del_init(&client->tasks[i].list);
+			
+			list_move(&client->list, &mc->client_detachdq);
+			client->state |= MC_CLIENT_DETACHED;
+			if (det->exit && (client->flags & BIT(MC_CLIENT_F_EXIT)) == 0) {
+				mc_exit_client(client);
+			}
+			LOGI("Detach %s successfully.", det->name);
+			return 1;
 		}
 	}
-	if (client) {
-		int i;
-		for (i = 0; i < client->count; i++)
-			list_del_init(&client->tasks[i].list);
-		
-		list_del(&client->list);
-		list_add_tail(&client->list, &mc->detach_head);
-		set_client_state(client, MC_CLIENT_DETACHED);
-		LOGI("Detach %s successfully.", name);
-	} else {
-		struct mc_guard *guard = mc_guard_search(name);
-		LOGI("Detach from guard list, guard ID: %d.", guard_id);
-		if (guard && guard->id == guard_id)
-			/* Delete from mc->guard_head */
-			list_del_init(&guard->list);
+	
+	struct mc_guard *guard = NULL;
+	list_for_each_entry(guard, &mc->guard_head, list) {
+		if (guard->state != MC_GUARD_STATE_DETACH && !strcmp(guard->name, det->name)) {
+			LOGI("%s detached from guard list, guard ID: %d.", det->name, guard->id);
+			guard->state = MC_GUARD_STATE_DETACH;
+			if (det->exit) {
+				kill(guard->pid, SIGKILL);
+			}
+			return 1;
+		}
 	}
+	LOGW("%s not found, detach failure.", det->name);
 	return 0;
 }
-int mc_client_detach_msg(struct ipc_msg *msg,  void *arg, void *cookie)
+int mcd_client_restart_msg(struct ipc_msg *msg,  void *arg, void *cookie)
+{
+	int found = 1;
+	struct mc_struct *mc = arg;
+	const char *name = msg->data;
+	struct mc_client *client = NULL;
+	list_for_each_entry(client, &mc->client_runningq, list) {
+		if (!strcmp(client->name, name)) {
+			/* Only exit the client, mc will start it again */
+			mc_exit_client(client);
+			goto out;
+		}
+	}
+	struct mc_guard *guard = NULL;
+	list_for_each_entry(guard, &mc->guard_head, list) {
+		if (guard->state != MC_GUARD_STATE_DETACH && !strcmp(guard->name, name)) {
+			if (mc_process_validate(guard->name, guard->pid))
+				kill(guard->pid, SIGTERM);
+			LOGI("restart %s.", name);
+			guard->pid = mc_process_restart(guard->name, guard->cmdline);
+			guard->state = MC_GUARD_STATE_NEW;
+			goto out;
+		}
+	}
+	found = 0;
+	LOGW("%s not found, restart failure.", name);
+out:
+	msg->data_len = sprintf(msg->data, "%s", found ? MC_STRING_TRUE : MC_STRING_FALSE) + 1;
+	return 0;
+}
+int mcd_client_detach_msg(struct ipc_msg *msg,  void *arg, void *cookie)
 {
 	struct mc_struct *mc = arg;
 	struct mc_detach *detach = (struct mc_detach *)msg->data;
-	LOGI("%s Message from %s", detach->state ? "Detach" : "Attach", detach->name);
-	return detach->state ? 
-		mc_client_detach(detach->name, detach->guard_id, mc) : mc_client_attach(detach->name, detach->guard_id, mc);
-	
+	LOGI("%s Message for %s", detach->state ? "Detach" : "Attach", detach->name);
+	int ret = detach->state ? mcd_client_detach(detach, mc) : mcd_client_attach(detach, mc);
+	msg->data_len = sprintf(msg->data, "%s", ret ? MC_STRING_TRUE : MC_STRING_FALSE) + 1;
+	return 0;
 }
-static int mc_tools_msg_process(struct ipc_msg *msg,  struct mc_struct *mc)
+static int mcd_tools_general_msg(struct ipc_msg *msg,  struct mc_struct *mc)
 {
 	const char *command = msg->data;
 
 	int offs = 0;
 	if (!strcmp(command, "show")) {
 		struct mc_client *client;
-		list_for_each_entry(client, &mc->work_head, list) {
+		list_for_each_entry(client, &mc->client_runningq, list) {
 			offs += sprintf(msg->data + offs, "%-16s(R) \tpid:%-6d \tID:%d\n", client->name, client->pid, client->guard ? client->guard->id : -1);
 		}
-		list_for_each_entry(client, &mc->detach_head, list) {
+		list_for_each_entry(client, &mc->client_detachdq, list) {
 			offs += sprintf(msg->data + offs, "%-16s(D) \tpid:%-6d \tID:%d\n", client->name, client->pid, client->guard ? client->guard->id : -1);
 		}
 
-		list_for_each_entry(client, &mc->loss_head, list) {
+		list_for_each_entry(client, &mc->client_lossq, list) {
 			offs += sprintf(msg->data + offs, "%-16s(L) \tpid:%-6d \tID:%d\n", client->name, client->pid, client->guard ? client->guard->id : -1);
 		}
 
-		list_for_each_entry(client, &mc->dead_head, list) {
+		list_for_each_entry(client, &mc->client_deadq, list) {
 			offs += sprintf(msg->data + offs, "%-16s(X) \tpid:%-6d \tID:%d\n", client->name, client->pid, client->guard ? client->guard->id : -1);
 		}
-
+		#define __guard_state(s) ({char __c = 'd'; if (s == MC_GUARD_STATE_NEW) __c = 'n'; else if (s == MC_GUARD_STATE_RUN)__c = 'r'; __c;})
 		struct mc_guard *guard;
 		list_for_each_entry(guard, &mc->guard_head, list) {
-			offs += sprintf(msg->data + offs, "%-16s(G) \tpid:%-6d \tID:%d\n", guard->name, guard->pid, guard->id);
+			offs += sprintf(msg->data + offs, "%-16s(%c) \tpid:%-6d \tID:%d\n", guard->name, __guard_state(guard->state), guard->pid, guard->id);
 		}
-
+		#undef __guard_state
 		msg->data_len = offs + 1;
 	} else {
 		msg->data_len = sprintf(msg->data, "Unkonwn command\n") + 1;
 	}
-	LOGI("command:%s, response length:%d", command, msg->data_len);
 	return 0;
 }
-static int mc_probe(struct ipc_timing *timing)
+static int mcd_probe(struct ipc_timing *timing)
 {
 	struct mc_struct *mc = timing->arg;
-	struct mc_probem probe; 
+	struct mc_probe probe; 
 	probe.time = mc_gettime();
 	
 	LOGH("Probe Message: %ld.", probe.time);
@@ -471,7 +541,7 @@ static int mc_probe(struct ipc_timing *timing)
 	return ipc_server_publish(IPC_TO_BROADCAST, 
 						MC_GUARD_MASK, MC_IND_PROBE, &probe, sizeof(probe));
 }
-static int mc_inspect(struct ipc_timing *timing)
+static int mcd_inspect(struct ipc_timing *timing)
 {
 	struct mc_struct *mc = timing->arg; 
 	struct mc_task *task, *tmp;
@@ -486,8 +556,7 @@ static int mc_inspect(struct ipc_timing *timing)
 				task->client->flags |= BIT(task->strategy);
 				action |= BIT(task->strategy);
 				if (task->strategy == MC_STRATEGY_RESTART) {
-					list_del(&task->client->list);
-					list_add(&task->client->list, &mc->loss_head);
+					list_move(&task->client->list, &mc->client_lossq);
 				} else if (task->strategy == MC_STRATEGY_REBOOT) {
                     LOGP("%s need to reboot\n", task->client->name);
                 }
@@ -496,7 +565,7 @@ static int mc_inspect(struct ipc_timing *timing)
 	}
 	
 	struct mc_client *client, *t;
-	list_for_each_entry_safe_reverse(client, t, &mc->work_head, list) {
+	list_for_each_entry_safe_reverse(client, t, &mc->client_runningq, list) {
 		//LOGI("probe time loss: %ld - %ld", mc->probe_time, client->probe_expire);
 		/*
 		 * Check probe time, in case client's callback blocked.
@@ -504,12 +573,11 @@ static int mc_inspect(struct ipc_timing *timing)
 		if (mc->probe_time >= client->probe_expire) {
 			LOGE("Probe(%s) miss from %ld to %ld.", client->name, client->probe_expire, mc->probe_time);
 			client->flags |= BIT(MC_STRATEGY_RESTART);
-			list_del(&client->list);
-			list_add(&client->list, &mc->loss_head);
+			list_move(&client->list, &mc->client_lossq);
 		} else break;
 	}
 
-	list_for_each_entry(client, &mc->loss_head, list) {
+	list_for_each_entry(client, &mc->client_lossq, list) {
 		LOGI("client:%s flags:%08x.", client->name, client->flags);	
 		if (!(client->flags & BIT(MC_CLIENT_F_EXIT)))
 			mc_exit_client(client);
@@ -533,30 +601,33 @@ static void mc_timers_init(struct mc_struct *mc)
 	struct mc_timers *tms = mc->timers;
 	
 	assert(tms != NULL);
-	
-	/* Cyclic Timer for feeding watchdog */
-	ipc_timing_init(&tms->feedwd_timing, 1, 
-						mc->config->watchdog_interval, 0, mc, mc_feedwd);
-	assert(ipc_timing_register(&tms->feedwd_timing) == 0);
+	if (mc->config->watchdog_interval > 0) {
+		/* Cyclic Timer for feeding watchdog */
+		ipc_timing_init(&tms->feedwd_timing, 1, 
+							mc->config->watchdog_interval, 0, mc, mc_feedwd);
+		assert(ipc_timing_register(&tms->feedwd_timing) == 0);
+	}
 
+	if (mc->config->patrol_interval > 0) {
+		/* Cyclic Timer for inspecting clients */
+		ipc_timing_init(&tms->patrol_timing, 1, 
+							mc->config->patrol_interval, 0, mc, mcd_inspect);
+		assert(ipc_timing_register(&tms->patrol_timing) == 0);
+	}
 
-	/* Cyclic Timer for inspecting clients */
-	ipc_timing_init(&tms->patrol_timing, 1, 
-						mc->config->patrol_interval, 0, mc, mc_inspect);
-	assert(ipc_timing_register(&tms->patrol_timing) == 0);
+	if (mc->config->probe_interval > 0) {
+		/* Cyclic Timer for probe message to clients */
+		ipc_timing_init(&tms->probe_timing, 1, 
+							mc->config->probe_interval, 0, mc, mcd_probe);
+		assert(ipc_timing_register(&tms->probe_timing) == 0);
+	}
 
-
-	/* Cyclic Timer for probe message to clients */
-	ipc_timing_init(&tms->probe_timing, 1, 
-						mc->config->probe_interval, 0, mc, mc_probe);
-	assert(ipc_timing_register(&tms->probe_timing) == 0);
-
-
-	/* Cyclic Timer for guarding */
-	ipc_timing_init(&tms->guard_timing, 0, 
-						mc->config->guard_delay, 0, mc, mc_guard_delay);
-	assert(ipc_timing_register(&tms->guard_timing) == 0);
-
+	if (mc->config->guard_delay > 0) {
+		/* Cyclic Timer for guarding */
+		ipc_timing_init(&tms->guard_timing, 0, 
+							mc->config->guard_delay, 0, mc, mcd_guard_delay);
+		assert(ipc_timing_register(&tms->guard_timing) == 0);
+	}
 	if (mc->config->auto_reboot_timeout > 0) {
 		/* Cyclic Timer for auto reboot */
 		ipc_timing_init(&tms->auto_reboot_timing, 0, 
@@ -564,6 +635,10 @@ static void mc_timers_init(struct mc_struct *mc)
 		assert(ipc_timing_register(&tms->auto_reboot_timing) == 0);
 	}
 }
+
+/*
+ * Call this after ipc_server_init(), as internal timers depend on IPC
+ */
 static int mc_init(const char *conf, struct mc_struct *mc)
 {	
 	memset(mc, 0, sizeof(struct mc_struct))	;
@@ -590,19 +665,18 @@ static int mc_init(const char *conf, struct mc_struct *mc)
 	memset(mc->vote_sleep, 0, sizeof(struct mc_referee));
 	memset(mc->vote_reboot, 0, sizeof(struct mc_referee));
 	
-	INIT_LIST_HEAD(&mc->dead_head);
-	INIT_LIST_HEAD(&mc->loss_head);
-	INIT_LIST_HEAD(&mc->work_head);
-	INIT_LIST_HEAD(&mc->detach_head);
+	INIT_LIST_HEAD(&mc->client_deadq);
+	INIT_LIST_HEAD(&mc->client_lossq);
+	INIT_LIST_HEAD(&mc->client_runningq);
+	INIT_LIST_HEAD(&mc->client_detachdq);
 	INIT_LIST_HEAD(&mc->task_head);
 	INIT_LIST_HEAD(&mc->guard_head);
-
 	mc_config_init(conf);
 	
 	if (mc_watchdog_init(mc->config->watchdog_timeout) < 0)
 		return -1;
 	
-	mc_guard_init(&mc->guard_head);
+	mcd_guard_init(mc);
 
 	mc_timers_init(mc);
 	
@@ -663,7 +737,7 @@ static int mc_ipc_register_process(const struct ipc_server *sevr,  struct mc_str
 			goto err;
 		}
 	
-		client = mc_client_construct(reginfo, subscriber, mc);
+		client = mcd_client_construct(reginfo, subscriber, mc);
 		if (!client)
 			goto err;
 		
@@ -705,7 +779,7 @@ static int mc_ipc_register_process(const struct ipc_server *sevr,  struct mc_str
 
 err:
 	if (client)
-		mc_client_destroy(client, mc);
+		mcd_client_destroy(client, mc);
 	if (prname)
 		free(prname);
 	if (subscriber)
@@ -797,10 +871,10 @@ static int mc_ipc_shutdown_process(const struct ipc_server *sevr, struct mc_stru
 			LOGW("Reboot in progress, stop client restart.");
 			need_restart = 0;
 		} 
-		mc_client_destroy(client, mc);
+		mcd_client_destroy(client, mc);
 
 		if (need_restart)
-			mc_client_restart(client, mc);
+			mcd_client_restart(client, mc->config->delay_restart);
 	}
 	return 0;
 }
@@ -822,41 +896,44 @@ static int mc_ipc_handler(struct ipc_msg *msg, void *arg, void *cookie)
 	int ret = -1;
 	switch (msg->msg_id) {
 	case MC_MSG_PROBE:
-		ret = mc_client_probe_msg(msg, cookie);
+		ret = mcd_client_probe_msg(msg, cookie);
 		break;
 	case MC_MSG_READY:
-		ret = mc_client_ready_msg(msg, cookie);
+		ret = mcd_client_ready_msg(msg, cookie);
 		break;
 	case MC_MSG_EXIT:
-		ret = mc_client_exit_msg(msg, cookie);
+		ret = mcd_client_exit_msg(msg, cookie);
 		break;
 	case MC_MSG_HEARTBEAT:
-		ret = mc_client_heartbeat_msg(msg, cookie);
+		ret = mcd_client_heartbeat_msg(msg, cookie);
 		break;
 	case MC_MSG_DETACH:
-		ret = mc_client_detach_msg(msg, arg, cookie);
+		ret = mcd_client_detach_msg(msg, arg, cookie);
 		break;
 	case MC_MSG_EXCEPTION:
-		ret = mc_client_exception_msg(msg, arg, cookie);
+		ret = mcd_client_exception_msg(msg, arg, cookie);
 		break;
 	case MC_MSG_SYN:
-		ret = mc_client_syn_msg(msg, arg, cookie);
+		ret = mcd_client_syn_msg(msg, arg, cookie);
 		break;
 	case MC_MSG_ACK:
-		ret = mc_client_ack_msg(msg, arg, cookie);
+		ret = mcd_client_ack_msg(msg, arg, cookie);
 		break;
 	case MC_MSG_APPLY:
-		ret = mc_client_apply_msg(msg, arg, cookie);
+		ret = mcd_client_apply_msg(msg, arg, cookie);
 		break;
 	case MC_MSG_VOTE:
-		ret = mc_client_vote_msg(msg, arg, cookie);
+		ret = mcd_client_vote_msg(msg, arg, cookie);
 		break;
 	case MC_MSG_REBOOT:
-		ret = mc_client_reboot_msg(msg, arg, cookie);
+		ret = mcd_client_reboot_msg(msg, arg, cookie);
+		break;
+	case MC_MSG_RESTART:
+		ret = mcd_client_restart_msg(msg, arg, cookie);
 		break;
 	default:
 		if (msg->msg_id == 12345) {
-			return mc_tools_msg_process(msg, arg);
+			return mcd_tools_general_msg(msg, arg);
 		}
 		printf("Unexpected messages.");
 		break;
@@ -896,6 +973,30 @@ static int mc_ipc_manager(const struct ipc_server *sevr, int cmd,
 		return -1;
 	}
 }
+static void sigterm()
+{
+	LOGP("Event: SIGTERM recvd.");
+	exit(0);
+}
+static void sigchid()
+{
+	int status;
+    pid_t pid;
+    while((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+		if (WIFEXITED(status)) {
+			LOGI("PID:%d exit status: %d", pid, WEXITSTATUS(status));
+		} else if (WIFSIGNALED(status)) {
+			LOGI("PID:%d exit sig: %d", pid, WTERMSIG(status));
+		} else if (WIFSTOPPED(status)) {
+			LOGI("PID:%d stop sig: %d", pid, WSTOPSIG(status));
+		} else if (WIFCONTINUED(status)) {
+			LOGI("PID:%d SIGCONT recvd", pid);
+		} else {
+			LOGI("PID:%d recycle", pid);
+		}
+    }
+	LOGI("PID[%d] errno:%d", pid, errno);
+}
 static int mc_event_handler(int fd, void *arg)
 {
 	int event;
@@ -910,12 +1011,16 @@ static int mc_event_handler(int fd, void *arg)
 	} while (1);
 	switch (event) {
 	case SIGUSR1:
+		LOGI("SIGUSR1 recvd.");
+		mcd_guard_start(mc);
 		break;
 	case SIGUSR2:
 		break;
 	case SIGTERM:
-		LOGP("Event: SIGTERM recvd.");
-		exit(0);
+		sigterm();
+		break;
+	case SIGCHLD:
+		sigchid();
 		break;
 	case MC_EVENT_REBOOT:
 		mc->flags |= BIT(MC_F_REBOOT);
@@ -946,6 +1051,7 @@ static int mc_evtfd()
 	signal(SIGUSR1, mc_event);
 	signal(SIGUSR2, mc_event);
 	signal(SIGTERM, mc_event);
+	signal(SIGCHLD, mc_event);
 	LOGI("mc event fd init done.");
 	return pipe[0];
 }
@@ -984,10 +1090,8 @@ int main(int argc, char **argv)
 			exit(-1);
 		}
 	}
-
 	if (is_daemonize)
 		daemonize();
-	
 	if (ipc_server_init(MC_SERVER, mc_ipc_handler) < 0)
 		return -1;
 

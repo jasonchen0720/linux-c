@@ -63,7 +63,40 @@ static int brk_ipc_client_manager(const struct ipc_server *sevr, int cmd,
 		return -1;
 	}
 }
+#if 1
+#include "mc_client.h"
 
+static struct ipc_timing ht_timing;
+static int at_mc_heartbeat(struct ipc_timing *t)
+{
+	return mc_client_heartbeat();
+}
+static int at_mc_callback(int msg, void *data, int size, void *arg)
+{
+	return 0;
+}
+
+static int at_mc_register(const char *name)
+{
+	char buf[512];
+	struct mc_reginfo *info = (struct mc_reginfo *)buf;
+	info->tasks[0].interval = 10;
+	info->tasks[0].strategy = MC_STRATEGY_RESTART;
+	info->tasks[0].tid	   = mc_gettid();
+	info->count			= 1;
+	info->latch_time	= 5;
+	info->pid			= getpid();
+	strcpy(info->name, 	name);
+	strcpy(info->cmdline, name);
+	int ret = mc_client_register(MC_GUARD_MASK | MC_SYSTEM_MASK, info, at_mc_callback, NULL);
+	if (!ret) {
+		ipc_timing_init(&ht_timing, 1, 5, 0, NULL, at_mc_heartbeat);
+		ipc_timing_register(&ht_timing);
+	}
+	return ret;
+}
+
+#endif
 int main(int argc, char **argv)
 {
 	int c = 0;
@@ -92,6 +125,8 @@ int main(int argc, char **argv)
 	if (ipc_server_setopt(IPC_SEROPT_SET_MANAGER, brk_ipc_client_manager) < 0)
 		goto out;
 	if (ipc_server_setopt(IPC_SEROPT_SET_ARG, 	  brk_arg()) < 0)
+		goto out;
+	if (at_mc_register("broker") < 0)
 		goto out;
 	if (ipc_server_run() < 0)
 		goto out;

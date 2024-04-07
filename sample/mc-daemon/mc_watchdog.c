@@ -2,11 +2,12 @@
 #include <unistd.h>
 #include <assert.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
 
 #include "mc_watchdog.h"
-#define WDON
+//#define WDON
 #define	WDIOC_SETTIMEOUT       _IOWR('W', 6, int)
 #define WDDEV   				"/dev/watchdog0"
 #define LOG_TAG 				"wdog"
@@ -20,7 +21,7 @@ int mc_watchdog_init(int timeout)
 	int fd = open(WDDEV, O_RDWR);
 
 	if (fd < 0) {
-		LOGE("watchdog init failure.");
+		LOGE("watchdog init failure: %d.", errno);
 		return -1;
 	}
 
@@ -43,6 +44,7 @@ int mc_watchdog_init(int timeout)
 	LOGI("mc watchdog init done.");
 	return 0;
 }
+
 int mc_watchdog_feed()
 {
 #ifdef WDON

@@ -5,6 +5,6 @@
 
 int mc_exception_test(int e, struct mc_einfo *info);
 int mc_exception_test_only(int e, struct mc_einfo *info);
-int mc_client_exception_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie);
+int mcd_client_exception_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie);
 
 #endif

@@ -7,7 +7,6 @@
 #include "mc_log.h"
 #include "mc_utils.h"
 #include "mc_define.h"
-#include "mc_guard.h"
 #include "mc_config.h"
 
 #include "generic_util.h"
@@ -88,27 +87,34 @@ struct mc_struct
 	struct mc_timers	*timers;
 	
 	/* Dead Client list */
-	struct list_head dead_head;
-	
-	struct list_head loss_head;
+	struct list_head client_deadq;
+	struct list_head client_lossq;
 	/* Working Client list */
-	struct list_head work_head;
-	struct list_head detach_head;
+	struct list_head client_runningq;
+	struct list_head client_detachdq;
 	/* All registered active threads list */
 	struct list_head task_head;
-	
-	struct list_head guard_head;
 
+	struct list_head guard_head;
 	pthread_mutex_t 	mutex;	
 	pthread_condattr_t  cattr;
 };
-
+struct mc_guard
+{
+	int 		id; /* Defined in enum MC_STATIC_GUARD */
+	int 		state;
+	pid_t 		pid;
+	const char *name;
+	const char *cmdline; 
+	const char *pidfile;
+	struct list_head list;
+};
 struct mc_client
 {		
 	int 	state;
 	int		flags;
 	long 	probe_expire;
-
+	long	birth_time;
 	/* Register info: process'id */
 	pid_t pid;
 	/* Register info: task count */
@@ -155,6 +161,7 @@ enum MC_F_BITS
 	MC_F_POWER_OFF,
 	MC_F_REBOOT,
 	MC_F_SHUTDOWN,
+	MC_F_GUARD_RUN,
 	MC_F_MAX = 31,
 };
 enum {
@@ -166,6 +173,10 @@ enum MC_EVTS {
 	MC_EVENT_REBOOT		= 100,
 	MC_EVENT_SHUTDOWN,
 };
+#define list_move(node, head) do {\
+		list_del(node);\
+		list_add_tail(node, head);\
+	} while (0)
 #define get_client_from_cookie(cookie)	(((struct mc_subscriber *)cookie)->client)
 #define is_bitmap_full(bitmap, mc)		(!memcmp(bitmap, (mc)->full_bitmap, sizeof((mc)->full_bitmap)))
 void mc_event(int event);

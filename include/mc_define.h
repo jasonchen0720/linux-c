@@ -25,7 +25,11 @@ enum MC_MSG_ID {
 	MC_MSG_APPLY,
 	MC_MSG_VOTE,
 	MC_MSG_REBOOT,
+	MC_MSG_RESTART,
 };
+
+#define MC_STRING_TRUE 		"true"
+#define MC_STRING_FALSE 	"false"
 struct mc_val
 {
 	int value;
@@ -106,6 +110,7 @@ struct mc_vote
 struct mc_detach
 {
 	int state;
+	int exit;
 	int guard_id;
 	char name[MC_CLIENT_NAME_LEN + 1];
 };
@@ -163,7 +168,7 @@ struct mc_heartbeat
 	/* Thread ID */
 	unsigned long tid;
 };
-struct mc_probem 
+struct mc_probe 
 {
 	long time;
 };

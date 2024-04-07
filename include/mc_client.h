@@ -11,7 +11,8 @@ int mc_client_register(unsigned long mask, struct mc_reginfo *info,
 /*
  * @state: 1:detach 0:attach
  */
-int mc_client_detach(int identity, int state);
+int mc_client_detach(const char *name, int identity, int state, int exit);
+int mc_client_restart(const char *name);
 int mc_client_heartbeat();
 int mc_client_ready();
 int mc_client_ready_test(int id, struct mc_ready *rdy);

@@ -48,14 +48,14 @@ err:
 	pthread_mutex_unlock(&__mc_mutex);
 	return -1;
 }
-static int mc_client_probe(struct mc_cltinfo *c, struct mc_probem *probe)
+static int mc_client_probe(struct mc_cltinfo *c, struct mc_probe *probe)
 {
 	char buf[64];
 	struct ipc_msg *msg = (struct ipc_msg *)buf;
 	msg->msg_id 	= MC_MSG_PROBE;
-	msg->data_len	= sizeof(struct mc_probem);
+	msg->data_len	= sizeof(struct mc_probe);
 	LOGH("Probe(%s):%ld", c->name, probe->time);
-	memcpy(msg->data, probe, sizeof(struct mc_probem));
+	memcpy(msg->data, probe, sizeof(struct mc_probe));
 	return ipc_subscriber_report(c->subscriber, msg) == IPC_REQUEST_SUCCESS ? 0 : -1;
 }
 static int mc_client_exit(struct mc_cltinfo *c)
@@ -160,15 +160,16 @@ err:
  * @identity: defined in enum MC_STATIC_IDENTITY, if none please use MC_IDENTITY_DUMMY instead.
  * @state: 1:detach 0:attach
  */
-int mc_client_detach(int identity, int state)
+int mc_client_detach(const char *name, int identity, int state, int exit)
 {
 	char buf[128] = {0};
 	struct ipc_msg 	 *msg = (struct ipc_msg   *)buf;
 	struct mc_detach *det = (struct mc_detach *)msg->data;
 	det->guard_id	= identity;
 	det->state		= state;
-	process_name(det->name, sizeof(det->name), getpid());
-
+	det->exit		= exit;
+	snprintf(det->name, sizeof(det->name), name);
+	msg->flags 	 	= IPC_FLAG_REPLY;
 	msg->msg_id		= MC_MSG_DETACH;
 	msg->data_len	= sizeof(struct mc_detach);
 	
@@ -183,8 +184,35 @@ int mc_client_detach(int identity, int state)
 		return -1;
 	}
 	ipc_client_close(&client);
-	return 0;
+	return !strcmp(msg->data, MC_STRING_TRUE);
 }
+int mc_client_restart(const char *name)
+{
+	char buf[MC_CLIENT_NAME_LEN + 17] = {0};
+	struct ipc_msg *msg = (struct ipc_msg *)buf;
+	size_t len = strlen(name);
+	if (len > MC_CLIENT_NAME_LEN) {
+		LOGE("name too long.");
+		return -1;
+	}
+	strcpy(msg->data, name);
+	msg->flags 	= IPC_FLAG_REPLY;
+	msg->msg_id = MC_MSG_RESTART;
+	msg->data_len = len + 1;
+	struct ipc_client client;
+	if (ipc_client_init(MC_SERVER, &client) < 0) {
+		LOGE("client init failure.");
+		return -1;
+	}
+	if (ipc_client_request(&client, msg, sizeof(buf), 5) < 0) {
+		LOGE("client request failure.");
+		ipc_client_close(&client);
+		return -1;
+	}
+	ipc_client_close(&client);
+	return !strcmp(msg->data, MC_STRING_TRUE);
+}
+
 int mc_client_ready()
 {	
 	struct mc_cltinfo *pc = __mc_client;

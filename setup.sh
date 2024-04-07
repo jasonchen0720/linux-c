@@ -12,6 +12,7 @@ export LD_LIBRARY_PATH=$LIB_DIR:$LD_LIBRARY_PATH
 export PATH=$BIN_DIR:$PATH
 
 function buildall() {
+	make clean
 	make
 	install -m 644 $PROJECT_ROOT/co/libco.so                   -D $LIB_DIR/libco.so
 	install -m 644 $PROJECT_ROOT/ipc/libipc.so                 -D $LIB_DIR/libipc.so
@@ -21,7 +22,8 @@ function buildall() {
 	install -m 644 $PROJECT_ROOT/api/libapi.so                 -D $LIB_DIR/libapi.so
 	
 	install -m 755 -d $BIN_DIR
-	install -m 755 $PROJECT_ROOT/sample/mc/mcd                 -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/sample/mc-daemon/mcd          -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/sample/mc-tools/mc-tools      -D $BIN_DIR/
 	install -m 755 $PROJECT_ROOT/sample/broker/broker          -D $BIN_DIR/
 	install -m 755 $PROJECT_ROOT/sample/*-sample/*-sample      -D $BIN_DIR/
 }
