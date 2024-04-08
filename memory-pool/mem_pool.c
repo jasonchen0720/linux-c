@@ -29,11 +29,9 @@ struct mem_stock
 	struct rb_node    node;
 	struct list_head  list;
 	struct mem_cache *cache;
-
-	long     		  recycnt;	/* recycle count */
 	struct mem_chunk *recycle;
-	
-	long 	index; 
+	int     		  recycnt;	/* recycle count */
+	int 	index; 
 	char 	start[0];
 } __attribute__((aligned(ALIGN)));
 
@@ -123,7 +121,7 @@ static void chunk_free(struct mem_stock *stock, void *p)
 {
 	struct mem_chunk *chunk = (struct mem_chunk *)p;
 
-	LOG("stock@%p, recycle count: %lu, index: %lu, stock->start: %p", stock, stock->recycnt, stock->index, stock->start);
+	LOG("stock@%p, recycle count: %d, index: %d, stock->start: %p", stock, stock->recycnt, stock->index, stock->start);
 	if (stock_exhausted(stock)) {
 		list_del(&stock->list);
 		list_add(&stock->list, &stock->cache->free_head);
@@ -202,7 +200,7 @@ void *mem_cache_alloc(struct mem_cache *cache)
 		return NULL;
 	}
 	struct mem_stock *stock = list_first_entry(&cache->free_head, struct mem_stock, list);
-	LOG("stock->recycle: %p, stock->index: %lu, stock->start: %p.", stock->recycle, stock->index, stock->start);
+	LOG("stock->recycle: %p, stock->index: %d, stock->start: %p.", stock->recycle, stock->index, stock->start);
 	if (stock->recycle) {
 		chunk = stock->recycle;
 		stock->recycle = chunk->next;
@@ -247,6 +245,10 @@ struct mem_pool *mem_pool_create(size_t start_size, size_t diff_size, size_t slo
 		return NULL;
 	}
 
+	pool->start_size = start_size;
+	pool->diff_size  = diff_size;
+	pool->slot_count = slot_count;
+	pool->slot_cache = cache;
 	rb_tree_init(&pool->stock_tree, stock_compare, stock_search, stock_print);
 	
 	int i;
@@ -256,10 +258,6 @@ struct mem_pool *mem_pool_create(size_t start_size, size_t diff_size, size_t slo
 			return NULL;
 		}
 	}
-	pool->start_size = start_size;
-	pool->diff_size  = diff_size;
-	pool->slot_count = slot_count;
-	pool->slot_cache = cache;
 	return pool;
 }
 void mem_pool_destroy(struct mem_pool *pool)
