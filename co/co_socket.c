@@ -30,7 +30,7 @@ int sock_cache_init()
 	
 	LOG("co: chunk_size: %lu, chunk_count: %lu", chunk_size, chunk_count);
 	
-	socket_cache = mem_cache_create(chunk_count, chunk_size);
+	socket_cache = mem_cache_create(chunk_count, chunk_size, 0);
 	if (socket_cache == NULL) {
 		LOG("cache alloc failed.");
 		return -1;
