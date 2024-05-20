@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
 #include "ipc_common.h"
 #include "ipc_atomic.h"
 #define UNIX_SOCK_DIR "/tmp/"
@@ -119,6 +120,8 @@ static inline int send_msg(int sock, struct ipc_msg *msg)
 struct ipc_buf * alloc_buf(unsigned int size);
 const char * strerr(int err);
 struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone);
+int recv_wait(int sock, struct timeval *timeout);
+int recv_stream(int sock, void *buffer, unsigned int size, struct timeval *timeout);
 int recv_msg(int sock,  char *buf, unsigned int size, int tmo);
 int sock_opts(int sock, int tmo);
 #endif

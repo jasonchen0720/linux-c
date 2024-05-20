@@ -64,8 +64,13 @@ int mc_exec(char *const argv[], const char *redirect, int flags)
 			dup2(fd, STDERR_FILENO);
 			close(fd);
 		} else {
+			/*
+			 * Keep all child process' stdout / stderr 
+			 */
+		#if 0
 			close(STDOUT_FILENO);
 			close(STDERR_FILENO);
+		#endif
 		}
 		LOGI("executing: %s, pid: %d", argv[0], getpid());
 		execvp(argv[0], argv);

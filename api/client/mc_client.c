@@ -265,7 +265,7 @@ int mc_client_heartbeat()
 	return 0;
 }
 
-int mc_client_exeception(int eid, void *einfo, unsigned int elen)
+int mc_client_exeception(int eid, const void *einfo, unsigned int elen)
 {
 	struct mc_cltinfo *pc = __mc_client;
 	

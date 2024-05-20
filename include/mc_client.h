@@ -16,7 +16,7 @@ int mc_client_restart(const char *name);
 int mc_client_heartbeat();
 int mc_client_ready();
 int mc_client_ready_test(int id, struct mc_ready *rdy);
-int mc_client_exeception(int eid, void *einfo, unsigned int elen);
+int mc_client_exeception(int eid, const void *einfo, unsigned int elen);
 int mc_client_sleep_syn(int tmo);
 int mc_client_sleep_ack(int identity);
 int mc_client_resume_syn(int source, int tmo);

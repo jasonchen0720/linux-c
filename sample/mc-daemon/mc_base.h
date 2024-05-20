@@ -62,7 +62,8 @@ struct mc_referee
 };
 struct mc_struct
 {
-	int  flags;
+	int  flags;	/* MC states flags */
+	volatile int  af;	/* MC action flags */
 	int  subscribers;
 	long probe_time;
 
@@ -158,11 +159,16 @@ enum MC_IPC_COOKIE_TYPES {
 enum MC_F_BITS 
 {
 	MC_F_MODEM_RST = 0,		/* Flag: Indicate modem resetting is in progress. */
-	MC_F_POWER_OFF,
 	MC_F_REBOOT,
 	MC_F_SHUTDOWN,
 	MC_F_GUARD_RUN,
 	MC_F_MAX = 31,
+};
+enum MC_AF_BITS 
+{
+	MC_AF_PWROFF = 0,		/* Indicate reboot with RB_POWER_OFF . */
+	MC_AF_RFORCE,			/* Indicate reboot by force . */
+	MC_AF_MAX = 31,
 };
 enum {
 	AF_BUSY,		/* Flag: Indicate action is in progress. */

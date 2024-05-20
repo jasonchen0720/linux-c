@@ -68,17 +68,17 @@ static void mc_index_free(int index, struct mc_struct *mc)
 	clear_bit(index, mc->index_stock);
 	LOGI("Free index:%d", index);
 }
-static void mc_kill_guard(struct mc_struct *mc)
+static void mc_kill_guard(struct mc_struct *mc, int sig)
 {
 	struct mc_guard *guard;
 	list_for_each_entry(guard, &mc->guard_head, list) {
 		if (mc_process_validate(guard->name, guard->pid)) {
-			LOGP("System shutdown, Kill %s", guard->name);
-			kill(guard->pid, SIGKILL);
+			LOGP("system shutdown, Kill(-%d) %s", sig, guard->name);
+			kill(guard->pid, sig);
 		}
 	}
 }
-static int mc_kill_client(struct mc_client *client)
+static int mc_kill_client(struct mc_client *client, int sig)
 {
 	/* Kill Probe first. */
 	if (kill(client->pid, 0) < 0) {
@@ -90,14 +90,14 @@ static int mc_kill_client(struct mc_client *client)
 	memset(name, 0, sizeof(name));
 	process_name(name, sizeof(name), client->pid);
 	if (strcmp(name, client->name)) {
-		LOGW("Kill %s %d: is not target.", client->name, client->pid);
+		LOGW("Kill(-%d) %s %d: is not target.", sig, client->name, client->pid);
 		goto out;
 	} 		
-	if (kill(client->pid, SIGKILL)) {
-		LOGE("SIGKILL to %s failed.", client->name);
+	if (kill(client->pid, sig)) {
+		LOGE("SIG(-%d)to %s failed.", sig, client->name);
 		return -1;
 	}
-	LOGI("%s pid:%d killed.", client->name, client->pid);
+	LOGI("%s pid:%d killed(-%d).", client->name, client->pid, sig);
 out:
 	client->flags |= BIT(MC_CLIENT_F_KILL);
 	return 0;
@@ -117,7 +117,7 @@ static int device_reboot(struct ipc_timing *timing)
 {
 	struct mc_struct *mc = timing->arg;
 	LOGP("Reboot timer expired.");
-	mc_reboot_system(mc, 0);
+	mc_reboot_system(mc, 0, 0);
 	return 0;
 }
 
@@ -582,7 +582,7 @@ static int mcd_inspect(struct ipc_timing *timing)
 		if (!(client->flags & BIT(MC_CLIENT_F_EXIT)))
 			mc_exit_client(client);
 		else if (!(client->flags & BIT(MC_CLIENT_F_KILL)))
-			mc_kill_client(client);
+			mc_kill_client(client, SIGKILL);
 		else
 			set_client_state(client, MC_CLIENT_BLOCKED);
 	}
@@ -590,11 +590,37 @@ static int mcd_inspect(struct ipc_timing *timing)
 	/* Inspect if Device rebooting triggered */
 	if (action & BIT(MC_STRATEGY_REBOOT)) {
         LOGP("reboot action %ld!\n", action);
-		mc_reboot_system(mc, 0);
+		mc_reboot_system(mc, 0, 0);
     }
 	
 	
 	return 0;
+}
+static int mc_shutdown_fn(struct ipc_timing *timing)
+{
+	struct mc_struct *mc = timing->arg;
+	
+	if (mc->flags & BIT(MC_F_SHUTDOWN)) {
+		LOGP("system shutdown, mcd exit guard force.");
+		mc_kill_guard(mc, SIGKILL);
+	}
+	if (mc->flags & BIT(MC_F_REBOOT)) {
+		LOGP("reboot / poweroff failure?");
+		mc_reboot(1, mc->af & BIT(MC_AF_PWROFF));
+	}
+	exit(0);
+	return 0;
+}
+static void mc_shutdown(struct mc_struct *mc)
+{
+	mc->flags |= BIT(MC_F_SHUTDOWN);
+	/*
+	 * Only care guards, as all registered client will exit in @MC_IND_SYS_SHUTDOWN callback.
+	 */
+	mc_kill_guard(mc, SIGTERM);
+	ipc_timing_unregister(&mc->timers->patrol_timing);
+	ipc_timing_init(&mc->timers->patrol_timing, 1, 5, 0, mc, mc_shutdown_fn);
+	ipc_timing_register(&mc->timers->patrol_timing);
 }
 static void mc_timers_init(struct mc_struct *mc)
 {
@@ -704,6 +730,11 @@ static int mc_ipc_connect_process(const struct ipc_server *sevr, struct mc_struc
 static int mc_ipc_register_process(const struct ipc_server *sevr,  struct mc_struct *mc, struct mc_reginfo *reginfo)
 {
 	char name[64] = {0};
+	if (mc->flags & (BIT(MC_F_REBOOT) | BIT(MC_F_SHUTDOWN))) {
+		LOGW("Reboot in progress, stop client register.");
+		return -1;
+	} 
+	
 	if (process_name(name, sizeof(name), sevr->identity) < 0) {
 		LOGE("MC get process:%d(%s) name fail.", sevr->identity, reginfo->name);
 		return -1;
@@ -946,8 +977,7 @@ static int mc_ipc_filter(struct ipc_notify *notify, void *arg)
 	struct mc_struct *mc = arg;
 	if (notify->msg_id == MC_IND_SYS_SHUTDOWN) {
 		LOGP("%s >>: system shutdown.", notify->data);
-		mc->flags |= BIT(MC_F_SHUTDOWN);
-		mc_kill_guard(mc);
+		mc_shutdown(mc);
 	}
 	return 0;
 }
@@ -976,6 +1006,7 @@ static int mc_ipc_manager(const struct ipc_server *sevr, int cmd,
 static void sigterm()
 {
 	LOGP("Event: SIGTERM recvd.");
+	printf("mcd exit.\n");
 	exit(0);
 }
 static void sigchid()
@@ -1027,9 +1058,8 @@ static int mc_event_handler(int fd, void *arg)
 		LOGP("Event: system reboot.");
 		break;
 	case MC_EVENT_SHUTDOWN:
-		mc->flags |= BIT(MC_F_SHUTDOWN);
 		LOGP("Event: system shutdown.");
-		mc_kill_guard(mc);
+		mc_shutdown(mc);
 		break;
 	default:
 		break;

@@ -1,7 +1,6 @@
 #ifndef _IPC_COMMON_H_
 #define _IPC_COMMON_H_
 
-#define IPC_MSG_MINI_SIZE	32 /* this must adpter to the size of struct ipc_msg */
 enum ERR_CODE
 {
 	IPC_EMIN	= -1,
@@ -24,6 +23,10 @@ struct ipc_msg
 	unsigned short 	data_len;
 	char 			data[0];
 }__attribute__((packed));
+
+#define IPC_MSG_HDRLEN		(sizeof(struct ipc_msg))
+#define IPC_MSG_MINI_SIZE	(IPC_MSG_HDRLEN + 16) 		/* this must adpter to the size of struct ipc_msg */
+
 /* This identity is used to indicate thst the notify message needs to be dispatched to all the related clients */
 #define IPC_TO_BROADCAST	0x7FFFFFFF
 #define IPC_TO_NOTIFY		0x7FFFFFFE
@@ -65,7 +68,7 @@ enum {
 /*
  * ipc_msg_space_check() - Used to check if the buffer space %max is enough for the ipc message. 
  */
-#define ipc_msg_space_check(max, size)		((max) >= sizeof(struct ipc_msg) + (size))
+#define ipc_msg_space_check(max, size)		((max) >= IPC_MSG_HDRLEN + (size))
 /*
  * ipc_notify_space_check() - Used to check if the buffer space %max is enough for the notify message. 
  */

@@ -53,7 +53,7 @@ static int mct_test(unsigned long mask)
 	info->latch_time	= 5;
 	info->pid			= getpid();
 	strcpy(info->name, 	  MC_TOOLS_NAME);
-	strcpy(info->cmdline, MC_TOOLS_NAME" restart");
+	strcpy(info->cmdline, MC_TOOLS_NAME" restarting");
 	if (mc_client_register(mask, info, mct_test_callback, NULL) < 0) {
 		printf("Error exit!");
 		return -1;
@@ -160,7 +160,7 @@ int main(int argc, char **argv)
 	if (!strcmp(argv[1], "show"))
 		return mct_show();
 
-	if (!strcmp(argv[1], "restart"))
+	if (!strcmp(argv[1], "restarting"))
 		return mct_test_restart();
 	
 	if (argc < 3) {

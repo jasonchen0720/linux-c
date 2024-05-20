@@ -53,7 +53,7 @@ int mcd_client_exception_msg(struct ipc_msg *msg, struct mc_struct *mc, void *co
 	case MC_EXCEPTION_MEM_USAGE:	/* Excessive usage of Memory */
         LOGP("exception(%d) reboot: %s\n", e->eid, e->info);
 	#if 0
-       mc_reboot_system(mc, 1);
+       mc_reboot_system(mc, 1, 0);
 	#endif
         break;
 	case MC_EXCEPTION_CPU_TEMP:		/* Temperature of cpu too high */

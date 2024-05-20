@@ -64,53 +64,52 @@ static int mc_referee_wait(struct mc_struct *mc, struct mc_referee *referee,  in
 	return err;
 }
 
-static void mc_reboot(struct mc_struct *mc)
-{
-	const char *desc = mc->flags & BIT(MC_F_POWER_OFF) ? "mcd-pwroff" : "mcd-reboot";
+void mc_reboot(int force, int pwroff)
+{	
+	const char *desc = pwroff ? "mcd-pwroff" : "mcd-reboot";
 	mc_event(MC_EVENT_SHUTDOWN);
 	LOGI("Device rebooting(%s)...", desc);
 	ipc_server_publish(IPC_TO_BROADCAST, 
 						MC_SYSTEM_MASK, MC_IND_SYS_SHUTDOWN, desc, strlen(desc) + 1);
+	if (!force) {
+		char bin[12];
+		char *argv[2];
+		argv[0] = bin;
+		argv[1] = NULL;
+		strcpy(bin, pwroff ? "poweroff" : "reboot");
+		mc_exec(argv, NULL, EXEC_F_WAIT);
+	} else
+		LOGP("force reboot.");
 	sync();
-	usleep(1000 * 1000);
-	if (mc->flags & BIT(MC_F_POWER_OFF))
-		reboot(RB_POWER_OFF);
-	else
-		reboot(RB_AUTOBOOT);
-
+	reboot(pwroff ? RB_POWER_OFF : RB_AUTOBOOT);
 	/* Never reach here */
 	LOGP("Device reboot failure:%d", errno);
 }
 static void *mc_reboot_entry(void *arg)
 {
 	struct mc_struct *mc = arg;
+	int force = mc->af & BIT(MC_AF_RFORCE);
+	int pwroff = mc->af & BIT(MC_AF_PWROFF);
+	LOGI("Device reboot af: %d", mc->af);
+	if (!force) {
+		int ret;
+		do {
+			ret = mc_referee_wait(mc, mc->vote_reboot, MC_IND_SYS_VOTE_REBOOT, mc->config->delay_reboot);
+		} while (ret == MC_APPLY_R_UNAPPROVED);
+	}
 	mc_synchor_wait(mc, mc->sync_reboot, MC_IND_SYS_REBOOT, mc->config->delay_reboot);
-	mc_reboot(mc);
+	mc_reboot(force, pwroff);
 	return NULL;
 }
-static void *mc_reboot_poll(void *arg)
-{
-	int ret;
-	struct mc_struct *mc = arg;
-	do {
-		ret = mc_referee_wait(mc, mc->vote_reboot, MC_IND_SYS_VOTE_REBOOT, mc->config->delay_reboot);
-	} while (ret == MC_APPLY_R_UNAPPROVED);
-	
-	return mc_reboot_entry(arg);
-}
-void mc_reboot_system(struct mc_struct *mc, int force)
-{
-	if (mc_thread_create(force ? mc_reboot_entry : mc_reboot_poll, mc)) {
+void mc_reboot_system(struct mc_struct *mc, int force, int pwroff)
+{	
+	if (force)
+		mc->af |= BIT(MC_AF_RFORCE);
+	if (pwroff)
+		mc->af |= BIT(MC_AF_PWROFF);
+	if (mc_thread_create(mc_reboot_entry, mc)) {
 		LOGP("Create task error, reboot directly.");
-		mc_reboot(mc);
-	}
-}
-void mc_pwroff_system(struct mc_struct *mc, int force)
-{
-	mc->flags |= BIT(MC_F_POWER_OFF);
-	if (mc_thread_create(force ? mc_reboot_entry : mc_reboot_poll, mc)) {
-		LOGP("Create task error, reboot directly.");
-		mc_reboot(mc);
+		mc_reboot(force, pwroff);
 	}
 }
 static void sync_waiting(struct ipc_msg *msg, void *arg)
@@ -305,7 +304,7 @@ static void reboot_waiting(struct ipc_msg *msg, void *arg)
 	struct mc_syn *syn = (struct mc_syn *)msg->data;
 	LOGP("Reboot sync(%d) proc, from:%s, tmo:%d.", syn->synid, syn->sponsor, syn->timeout);
 	mc_synchor_wait(mc, mc->sync_reboot, MC_IND_SYS_REBOOT, syn->timeout);
-	mc_reboot(mc);
+	mc_reboot(0, mc->af & BIT(MC_AF_PWROFF));
 }
 
 int mcd_client_reboot_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cookie)
@@ -324,7 +323,7 @@ int mcd_client_reboot_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cooki
 	struct mc_syn *syn = (struct mc_syn *)msg->data;
 	struct mc_val *val = (struct mc_val *)syn->data;
 	if (val->value)
-		mc->flags |= BIT(MC_F_POWER_OFF);
+		mc->af |= BIT(MC_AF_PWROFF);
 	if (ipc_async_execute(cookie, msg, sizeof(struct mc_synrsp), reboot_waiting, NULL, mc) < 0) {
 		LOGE("syn from:%s error.", syn->sponsor);
 		goto err;
@@ -333,6 +332,6 @@ int mcd_client_reboot_msg(struct ipc_msg *msg, struct mc_struct *mc, void *cooki
 err:
 	msg->data_len = sizeof(struct mc_synrsp);
 	pthread_mutex_unlock(&mc->mutex);
-	mc_reboot_system(mc, 1);
+	mc_reboot_system(mc, 1, val->value);
 	return 0;
 }

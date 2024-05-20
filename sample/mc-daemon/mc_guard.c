@@ -105,11 +105,18 @@ static int mc_guard_conf_append(const char *guard_conf, struct list_head *guard_
 	while (fgets(buf, sizeof(buf), fp)) {
 		name = buf;
 		mc_guard_skip_spaces(name);
-		if ((cmdline = strchr(name, ' ')) == NULL && 
-			(cmdline = strchr(name, '\t')) == NULL)
+		if ((cmdline = strchr(name, '\t')) != NULL) {
+			/* eat all ending spaces */
+			for (p = cmdline - 1; p > name && *p == ' '; p--)
+				*p = '\0';
+		} else if ((cmdline = strchr(name, ' ')) == NULL) {
+			continue;
+		}
+		*cmdline++ = '\0';
+
+		if (*name == '\0')
 			continue;
 		
-		*cmdline++ = '\0';
 		mc_guard_skip_spaces(cmdline);
 		for (pidfile = NULL, p = cmdline; *p; p++) {
 			if (*p == '\n' || *p == '\r') {

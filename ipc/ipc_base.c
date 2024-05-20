@@ -79,7 +79,7 @@ const char * strerr(int err)
 struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone)
 {
 	int left;
-	int msg_len;
+	int msg_len = -1;
 	IPC_LOGD("buf size:%u, head:%u, tail:%u.", buf->size, buf->head, buf->tail);
 	for (left = buf->tail - buf->head; left > 0; buf->head += msg_len, left = buf->tail - buf->head){
 		/* 
@@ -87,7 +87,7 @@ struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone)
 		 * this case usually occurs when some bytes have not been read,
 		 * return and continue to read.
 		 */
-		if (left < sizeof(struct ipc_msg))
+		if (left < IPC_MSG_HDRLEN)
 			goto __move;
 		
 		struct ipc_msg *message = (struct ipc_msg *)(buf->data + buf->head);
@@ -113,7 +113,7 @@ struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone)
 				 * Copy message to @clone if necessary. 
 				 * In case that the following unprocessed message in the buffer is corrupted.
 				 */
-				IPC_LOGW("message clone:%p, length:%d, head:%u, tail:%u, left %d bytes.", clone, msg_len, buf->head, buf->tail, left - msg_len);
+				IPC_LOGW("message clone:%p, msglen:%d, head:%u, tail:%u.", clone, msg_len, buf->head, buf->tail);
 				memcpy(clone, message, msg_len);
 				message = clone;
 			}
@@ -125,18 +125,18 @@ struct ipc_msg * find_msg(struct ipc_buf *buf, struct ipc_msg *clone)
 				 * move this message to the beginning of the buffer.
 				 */
 				 
-				IPC_LOGW("Not aligned, length:%d, head:%u, tail:%u, left %d bytes", msg_len, buf->head, buf->tail, left - msg_len);
+				IPC_LOGW("Not aligned, msglen:%d, head:%u, tail:%u", msg_len, buf->head, buf->tail);
 				memcpy(buf->data, message, msg_len);
 				message = (struct ipc_msg *)buf->data;
 			}
 		}
 		buf->head += msg_len;
-		IPC_LOGD("message found:%p, length:%d, head:%u, tail:%u, left %d bytes.", message, msg_len, buf->head, buf->tail, left - msg_len);
+		IPC_LOGD("message found:%p, msglen:%d, head:%u, tail:%u.", message, msg_len, buf->head, buf->tail);
 		return message;
 	}
 	return NULL;
   __move:
-  	IPC_LOGW("Incomplete msg, buf size:%u, head:%u, tail:%u, left %d bytes.", buf->size, buf->head, buf->tail, left);
+  	IPC_LOGW("Incomplete msg, msglen:%d, buf size:%u, head:%u, tail:%u, left %d bytes.", msg_len, buf->size, buf->head, buf->tail, left);
 	if (ipc_buf_full(buf) && buf->head) {
 		memcpy(buf->data, buf->data + buf->head, left);
 		buf->head = 0;
@@ -174,58 +174,94 @@ int sock_opts(int sock, int tmo)
 	}
 	return 0;
 }
-
-int recv_msg(int sock,  char *buf, unsigned int size, int tmo)
+/*
+ * @timeout  : 
+ *		[IN] : specifies the interval that select() should block waiting for @sock to become ready.
+ *		[OUT]: modifies timeout to reflect the amount of time not slept.
+ * On success, positive is returned.
+ * On error, -1 is returned.
+ * Timeout, 0 is returned.
+ */
+int recv_wait(int sock, struct timeval *timeout)
 {
+	int ret;
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(sock, &rfds);
-	struct timeval timeout = {.tv_sec  = tmo, .tv_usec = 0};
-	
+	IPC_LOGD("%lds %ldus", timeout->tv_sec, timeout->tv_usec);
+	do {
+		/*
+		 * On Linux, select() modifies timeout to reflect the amount of time not slept
+		 */
+		ret = select(sock + 1, &rfds, NULL, NULL, timeout);
+	} while (ret < 0 && errno == EINTR);
+	IPC_LOGD("%lds %ldus - ret: %d", timeout->tv_sec, timeout->tv_usec, ret);
+	return ret;
+}
+
+int recv_stream(int sock, void *buffer, unsigned int size, struct timeval *timeout)
+{
+	int rc = recv_wait(sock, timeout);
+	if (rc > 0) {
+		do {
+			int len = recv(sock, buffer, size, 0);
+			if (len > 0)
+				return len;
+			if (len == 0)
+				return IPC_RECEIVE_EOF;
+
+			IPC_LOGE("Recv errno:%d", errno);
+#if 0
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+				return IPC_RECEIVE_TMO;
+#endif
+			if (errno != EINTR)
+				return IPC_RECEIVE_ERR;
+	  	} while (1);
+	} else if (rc == 0) {
+		IPC_LOGE("Recv wait timedout.");
+		return IPC_RECEIVE_TMO;
+	} else {
+		IPC_LOGE("Recv wait errno:%d", errno);
+		return IPC_RECEIVE_ERR;
+	}
+}
+
+int recv_msg(int sock,  char *buf, unsigned int size, int tmo)
+{
+	struct timeval tv, *timeout = NULL;
+	if (tmo >= 0) {
+		timeout = &tv;
+		timeout->tv_sec  = tmo;
+		timeout->tv_usec = 0;
+	}
 	int len;
 	int offset = 0;
 	struct ipc_msg *msg = (struct ipc_msg *)buf;
-	if (!size)
+	if (size < IPC_MSG_HDRLEN)
 		return IPC_RECEIVE_EVAL;
-retry:
-	len = select(sock + 1, &rfds, NULL, NULL, tmo < 0 ? NULL : &timeout);
 
-	if (len == 0) {
-		IPC_LOGE("Select timedout with %d secs.", tmo);
-		return IPC_RECEIVE_TMO;
-	}
-	if (len < 0) {
-		if (errno == EINTR)
-			goto retry;
-		IPC_LOGE("Select errno:%d", errno);
-		return IPC_RECEIVE_ERR;
-	}
   	do {
-		len = recv(sock, buf + offset, size - offset, 0);
-		if (len > 0) {
-			offset += len;
-			if (offset < sizeof(struct ipc_msg) || offset < __data_len(msg)) {
-				IPC_LOGW("receive unfinished bytes: size: %d, offset: %d", size, offset);
-				if (offset < size)
-					continue;
-				return IPC_RECEIVE_EMEM;
-			}
-			return friendly(msg) ? offset : IPC_RECEIVE_EMSG;
+		len = recv_stream(sock, buf + offset, size - offset, timeout);
+		if (len <= 0) {
+			IPC_LOGE("Recv stream: %s", strerr(-len));
+			return len;
 		}
-		if (len == 0)
-			return IPC_RECEIVE_EOF;
-		if (errno == EINTR)
+		offset += len;
+		if (offset < IPC_MSG_HDRLEN || offset < __data_len(msg)) {
+			IPC_LOGW("Recv unfinished: msglen: %d, size: %d, offset: %d, tmo: %d", offset < IPC_MSG_HDRLEN ? -1 : __data_len(msg), size, offset, tmo);
+			if (offset >= size)
+				return IPC_RECEIVE_EMEM;
+			if (!timeout)
+				return IPC_RECEIVE_EMSG;
 			continue;
-		if (errno == EAGAIN || errno == EWOULDBLOCK)
-			return IPC_RECEIVE_TMO;
-		IPC_LOGE("Recv errno:%d", errno);			
-		break;
+		}
+		return friendly(msg) ? offset : IPC_RECEIVE_EMSG;
 	} while (1);
-	return IPC_RECEIVE_ERR;
 }
 struct ipc_buf * alloc_buf(unsigned int size)
 {
-	size += sizeof(struct ipc_msg);
+	size += IPC_MSG_HDRLEN;
 
 	unsigned int align = size & (IPC_MSG_ALIGN - 1);
 	if (align) {
@@ -243,7 +279,7 @@ struct ipc_buf * alloc_buf(unsigned int size)
 struct ipc_msg * ipc_clone_msg(const struct ipc_msg *msg, unsigned int size)
 {
 	size_t s = __data_len(msg);
-	size += sizeof(struct ipc_msg);
+	size += IPC_MSG_HDRLEN;
 	struct ipc_msg * clone_msg = (struct ipc_msg *)malloc(size > s ? size : s);
 
 	if (clone_msg) {
@@ -254,7 +290,7 @@ struct ipc_msg * ipc_clone_msg(const struct ipc_msg *msg, unsigned int size)
 }
 struct ipc_msg * ipc_alloc_msg(unsigned int size)
 {
-	struct ipc_msg * msg = (struct ipc_msg *)malloc(sizeof(struct ipc_msg) + size);
+	struct ipc_msg * msg = (struct ipc_msg *)malloc(IPC_MSG_HDRLEN + size);
 
 	if (msg) {
 		msg->msg_id = 0;

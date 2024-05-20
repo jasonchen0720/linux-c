@@ -924,6 +924,7 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 	int len;
 	struct ipc_buf *buf = core->buf;
 	struct ipc_msg *msg = (struct ipc_msg *)buf->data;
+	struct timeval timeout = {.tv_sec  = 0, .tv_usec = 500 * 1000};
 	ipc_buf_reset(buf);
   __recv:
 	len = recv(ipc->sock, buf->data + buf->tail, buf->size - buf->tail, 0);
@@ -933,7 +934,14 @@ static int ipc_common_socket_handler(struct ipc_core *core, struct ipc_server *i
 		do {
 			msg = find_msg(buf, core->clone);
 			if (!msg) {
-				if (ipc_buf_full(buf)) goto __error;
+				if (ipc_buf_full(buf)) {
+					IPC_LOGE("buffer full.");
+					goto __error;
+				}
+				if (recv_wait(ipc->sock, &timeout) <= 0) {
+					IPC_LOGE("recv wait timeout.");
+					goto __error;
+				}
 				goto __recv;
 			}
 			switch (msg->msg_id) {

@@ -31,8 +31,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/un.h>
-#include <sys/time.h>
-#include <sys/select.h>
 #include <pthread.h>
 #include <assert.h>
 #include <signal.h>
@@ -58,47 +56,6 @@ static void client_init(void)
 	pthread_atfork(NULL, NULL, client_back);
 }
 
-/**
- * ipc_receive - receive some bytes from socket
- * @sock: connected socket fd
- * @buffer: buffer used to store message
- * @size: buffer size
- * @tmo: time of receive timeout
- */
-static int ipc_receive(int sock, void *buffer, unsigned int size, int tmo)
-{
-	int rc;
-	int len;
-	fd_set rfds;
-	struct timeval timeout;
-	FD_ZERO(&rfds);
-	FD_SET(sock, &rfds);
-	timeout.tv_sec  = tmo;
-	timeout.tv_usec = 0;
-  __select:
-	rc = select(sock + 1, &rfds, NULL, NULL, &timeout);
-	if (rc > 0)
-	{
-	  __recv:
-		len = recv(sock, buffer, size, 0);
-		if (len > 0)
-			return len;
-		if (len == 0)
-			return IPC_RECEIVE_EOF;
-		if (errno == EINTR)
-			goto __recv;
-	}
-	else if (rc == 0)
-	{
-		return IPC_RECEIVE_TMO;
-	}
-	else
-	{
-		if (errno == EINTR)
-			goto __select;
-	}
-	return IPC_RECEIVE_ERR;
-}
 /**
  * ipc_connect - connect to server
  */
@@ -480,7 +437,7 @@ static int ipc_subscriber_connect(struct ipc_subscriber *subscriber)
 		if (!ipc_msg)
 			return -1;
 		else dynamic = 1;
-		sbuf = size + sizeof(struct ipc_msg);
+		sbuf = size + IPC_MSG_HDRLEN;
 	}
 	struct ipc_reg *reg = (struct ipc_reg *)ipc_msg->data;
 
@@ -607,9 +564,12 @@ static void * ipc_subscriber_task(void *arg)
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 	ipc_subscriber_sync(subscriber);
 	while (subscriber->mask) {
-		rc = ipc_receive(subscriber->client.sock, 
+		struct timeval timeout;
+		timeout.tv_sec 	= 30;
+		timeout.tv_usec = 0;
+		rc = recv_stream(subscriber->client.sock, 
 						buf->data + buf->tail, 
-						buf->size - buf->tail, 30);
+						buf->size - buf->tail, &timeout);
 		if (rc > 0) {
 			IPC_LOGD("receive %d bytes, offset: %u.", rc, buf->head);
 			buf->tail += rc;
