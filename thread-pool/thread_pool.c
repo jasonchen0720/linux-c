@@ -16,9 +16,9 @@
 static pthread_condattr_t __cond_attr;
 static pthread_once_t __init_once = PTHREAD_ONCE_INIT;
 static sigset_t __full_sigset;
-#define LOG_FILE			"./thread-pool.log"
-#define LOG_SIZE			1024 * 1024
-#define LOG_TAG				"thread-pool"
+#define __LOG_FILE			"./thread-pool.log"
+#define __LOG_SIZE			1024 * 1024
+#define __LOG_TAG			"thread-pool"
 
 struct thread_struct
 {

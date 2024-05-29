@@ -8,7 +8,7 @@
 #include "scl.h"
 #include "mc_log.h"
 #include "mc_config.h"
-#define LOG_TAG "config"
+#define __LOG_TAG "config"
 struct mc_config __mc_config = {0};
 static void set_int(const char *value, void *addr)
 {

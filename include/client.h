@@ -2,7 +2,6 @@
 #define __CLIENT_H__
 
 #define IPC_SERVER_TEST			"IPC_TEST"
-#define IPC_SERVER_BROKER	    "IPC_BROKER"
 
 int ipcc_common_request_easy(const char *server, int msg_id, void *data, int size, void *response, int rsplen);
 int ipcc_common_request(struct ipc_client *client, int msg_id, void *data, int size, void *response, int rsplen);
@@ -11,7 +10,7 @@ int ipcs_common_request(struct ipc_subscriber *subscriber, int msg_id, void *dat
 typedef void client_handle;
 enum WW_SERVICE_ID
 {
-	WW_SERVICE_BROKER = 0x0001,
+	WW_SERVICE_TEST = 0x0001,
 };
 /**
  * ind_msg_callback(int msg_id, void *data, int size, void *arg)

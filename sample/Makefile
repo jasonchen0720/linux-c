@@ -4,7 +4,6 @@ include $(PROJECT_ROOT)/cflags.mk
 all clean:
 	$(MAKE) -C ./mc-daemon  $@
 	$(MAKE) -C ./mc-tools  $@
-	$(MAKE) -C ./broker  $@
 	$(MAKE) -C ./tree-sample  $@
 ifeq ($(CONFIG_IPC),y)
 	$(MAKE) -C ./ipc-sample  $@

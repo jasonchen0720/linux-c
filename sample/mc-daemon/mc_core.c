@@ -17,7 +17,7 @@
 
 #include "generic_proc.h"
 
-#define LOG_TAG 	"core"
+#define __LOG_TAG 	"core"
 enum MC_CLIENT_F_BITS 
 {
 	MC_CLIENT_F_EXIT	= 0,

@@ -92,22 +92,30 @@ static inline int topic_check(unsigned long topic)
 {
 	return !(topic & (topic -1));
 }
-static inline void ipc_notify_pack(struct ipc_msg *msg, int to, unsigned long topic, int msg_id, const void *data, int size)
-{
-	struct ipc_notify *notify = (struct ipc_notify *)msg->data;
-	
-	notify->topic = topic;
-	notify->msg_id = msg_id;
-	notify->to = to;
-	if (data) {
-		memcpy(notify->data, data, size);
-		notify->data_len = size;
-	} else {
-		notify->data_len = 0;
-	}
-	msg->msg_id = IPC_SDK_MSG_NOTIFY;
-	msg->data_len = __data_len(notify);
-}
+#define ipc_notify_pack(msg, dest, mask, msg_id, data, size) do {\
+	struct ipc_notify *__n = ipc_msg_payload_of(msg, struct ipc_notify);\
+	__n->topic = mask;\
+	__n->msg_id = msg_id;\
+	__n->to = dest;\
+	if (data) {\
+		memcpy(__n->data, data, size);\
+		__n->data_len = size;\
+	} else {\
+		__n->data_len = 0;\
+	}\
+	msg->msg_id = IPC_SDK_MSG_NOTIFY;\
+	msg->data_len = __data_len(__n);\
+} while (0)
+#define ipc_notify_fill(msg, dest, mask, msg_id, data_len) do {\
+	struct ipc_notify *__n = ipc_msg_payload_of(msg, struct ipc_notify);\
+	__n->topic = mask;\
+	__n->msg_id = msg_id;\
+	__n->to = dest;\
+	__n->data_len = data_len;\
+	msg->flags = 0;\
+	msg->msg_id = IPC_SDK_MSG_NOTIFY;\
+	msg->data_len = __data_len(__n);\
+} while (0)
 static inline int send_msg(int sock, struct ipc_msg *msg)
 {
 	/*

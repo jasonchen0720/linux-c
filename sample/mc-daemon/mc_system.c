@@ -5,7 +5,7 @@
 #include <sys/reboot.h>
 #include "mc_system.h"
 
-#define LOG_TAG 	"system"
+#define __LOG_TAG 	"system"
 static int mc_synchor_wait(struct mc_struct *mc, struct mc_synchor *synchor, int indmsg, int timeout)
 {
 	LOGI("synchor@%p, indmsg:%d, timeout:%d.", synchor, indmsg, timeout);

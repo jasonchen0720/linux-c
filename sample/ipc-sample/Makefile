@@ -18,6 +18,7 @@ CFLAGS +=
 IFLAGS := \
 -I.\
 -I$(PROJECT_ROOT)/include \
+-I$(PROJECT_ROOT)/uapi/include \
 -I$(PROJECT_ROOT)/ipc
 
 #ld
@@ -37,7 +38,7 @@ SRCS += ipc_sample.c
 OBJS := $(SRCS:.c=.o)
 DEPS := $(SRCS:.c=.d)
 
-USER_OBJS :=
+USER_OBJS := $(PROJECT_ROOT)/uapi/libuapi.a
 
 LIBS := -lapi -lipc -lpthread
 

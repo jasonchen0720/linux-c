@@ -1,5 +1,5 @@
 SRCS += \
-./bs_tree.c \
+./bst.c \
 ./rb_tree.c
 
 SRCS += \

@@ -10,7 +10,7 @@
 #include "ipc_client.h"
 #include "generic_proc.h"
 
-#define LOG_TAG 		"client"
+#define __LOG_TAG 		"client"
 struct mc_cltinfo
 {
 	char name[MC_CLIENT_NAME_LEN + 1];

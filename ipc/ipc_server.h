@@ -131,7 +131,12 @@ int ipc_server_init(const char *server, int (*handler)(struct ipc_msg *, void *,
 int ipc_server_run();
 int ipc_server_exit();
 int ipc_server_publish(int to, unsigned long topic, int msg_id, const void *data, int size);
+int ipc_server_publishx(struct ipc_msg *msg,
+		int to, unsigned long mask, int msg_id, int data_len);
 int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int msg_id, const void *data, int size);
+int ipc_server_notifyx(const struct ipc_server *sevr, 
+					struct ipc_msg *msg, unsigned long mask, int msg_id, int data_len);
+int ipc_server_forward(const struct ipc_server *sevr, struct ipc_notify *notify);
 int ipc_server_setopt(int opt, void *arg);
 int ipc_server_proxy(int fd, int (*proxy)(int, void *), void *arg);
 /*
@@ -165,7 +170,7 @@ enum IPC_CLASS
  */
 #define ipc_cookie_type(cookie) ({ struct ipc_cookie *__c = (struct ipc_cookie *)cookie; __c ? __c->type : IPC_COOKIE_NONE; })
 int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie);
-int ipc_subscribed(const struct ipc_server *sevr, unsigned long mask);
+unsigned long ipc_subscribed(const struct ipc_server *sevr, unsigned long mask);
 int ipc_async_execute(void *cookie, struct ipc_msg *msg, unsigned int size, 
 				void (*func)(struct ipc_msg *, void *), 
 				void (*release)(struct ipc_msg *, void *), void *arg);

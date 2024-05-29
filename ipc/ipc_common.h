@@ -37,7 +37,7 @@ struct ipc_notify
 	int 			msg_id;
 	int 			data_len;
 	char 			data[0];
-};
+}__attribute__((packed));
 enum {
    /*
  	* Bits:0 - 7 used by Client.
@@ -65,14 +65,23 @@ enum {
 #define IPC_FLAG_EXPECT_REPLY	(1u << IPC_BIT_REPLY)
 #define IPC_FLAG_REPLY			(1u << IPC_BIT_REPLY)
 #define IPC_FLAG_CLIENT_MASK	((1u << IPC_BIT_SERVER) - 1)
+
+#define ipc_msg_buffer_size(len) (IPC_MSG_HDRLEN + (len)) /* @len: msg payload length. */
 /*
  * ipc_msg_space_check() - Used to check if the buffer space %max is enough for the ipc message. 
  */
-#define ipc_msg_space_check(max, size)		((max) >= IPC_MSG_HDRLEN + (size))
+#define ipc_msg_space_check(max, size) ((max) >= ipc_msg_buffer_size(size))
+#define ipc_msg_payload_of(buf, type) ((type *)((char *)buf + IPC_MSG_HDRLEN))
+
+
+#define ipc_notify_length(len) (sizeof(struct ipc_notify) + (len)) /* @len: notify payload length. */
+#define ipc_notify_buffer_size(len) ipc_msg_buffer_size(ipc_notify_length(len)) /* @len: notify payload length. */
 /*
  * ipc_notify_space_check() - Used to check if the buffer space %max is enough for the notify message. 
  */
-#define ipc_notify_space_check(max, size)	ipc_msg_space_check(max, sizeof(struct ipc_notify) + size)
+#define ipc_notify_space_check(max, size) ipc_msg_space_check(max, ipc_notify_length(size))
+#define ipc_notify_payload_of(buf, type) ((type *)((char *)buf + IPC_MSG_HDRLEN + sizeof(struct ipc_notify)))
+
 struct ipc_msg * ipc_clone_msg(const struct ipc_msg *msg, unsigned int size);
 struct ipc_msg * ipc_alloc_msg(unsigned int size);
 void ipc_free_msg(struct ipc_msg *msg);

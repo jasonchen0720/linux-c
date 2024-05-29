@@ -54,9 +54,9 @@ enum TIMER_BASE_STATE {
 #define	TMR_F_EXECUTING		8
 #define	TMR_F_WAITING		16
 #define	TMR_F_DETACH		32
-#define LOG_FILE			"./timer.log"
-#define LOG_SIZE			1024 * 1024
-#define LOG_TAG				"timer"
+#define __LOG_FILE			"./timer.log"
+#define __LOG_SIZE			1024 * 1024
+#define __LOG_TAG			"timer"
 static pthread_once_t __timer_init_once = PTHREAD_ONCE_INIT;
 static struct timer_base __timer_base = {
 	.state 		= TMR_BASE_INITIAL,

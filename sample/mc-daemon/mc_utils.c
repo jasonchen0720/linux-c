@@ -14,7 +14,7 @@
 #include "mc_base.h"
 #include "generic_proc.h"
 
-#define LOG_TAG 	"util"
+#define __LOG_TAG 	"util"
 int mc_thread_create(void* (*entry)(void *), void *arg)
 {
 	sigset_t set, oset;

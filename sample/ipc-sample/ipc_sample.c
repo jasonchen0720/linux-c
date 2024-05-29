@@ -14,7 +14,7 @@
 #include "ipc_client.h"
 #include "ipc_server.h"
 #include "ipcc.h"
-#include "broker_define.h"
+
 #define IPC_TEST			"IPC_TEST"
 static int sig_pipe = 0;
 static time_t g_start;
@@ -104,25 +104,13 @@ int sig_proxy_init()
 	printf("event proxy init success. \n");
 	return pipe[0];
 }
-__attribute__((unused))static int timing_handler(struct ipc_timing *t)
-{
-	printf("******* 0 Timing:%ld\n", time(NULL) - g_start);
-	ipc_timing_register(t);
-	return 0;
-}
-__attribute__((unused))static int timing_handler1(struct ipc_timing *t)
-{
-	printf(" ----------------- 1 Timing:%ld\n", time(NULL) - g_start);
-	//ipc_timing_register(t);
-	return 0;
-}
 static int timing_handler2(struct ipc_timing *t)
 {
 	printf(" ==================================== 2 Timing:%ld\n", time(NULL) - g_start);
 	//ipc_timing_register(t);
 	return 0;
 }
-static int _time()
+static int system_monotonic_time()
 {	
 	struct timeval t;
 	struct timeval *tv = &t;
@@ -131,68 +119,26 @@ static int _time()
 		return -1;
 	tv->tv_sec 	= ts.tv_sec;
 	tv->tv_usec = ts.tv_nsec / 1000000;
-	printf("Timing:%ld %ld\n", tv->tv_sec ,tv->tv_usec);
+	printf("timeval tv_sec: %ld, tv_usec: %ld\n", tv->tv_sec ,tv->tv_usec);
 	return 0;
+}
+static void uapi_func(const char *event, void *data, size_t size, void *arg)
+{
+	printf("event: %s recvd\n", event);
+	printf("data: %s\n", (char *)data);
+	printf("strlen(data): %lu, size: %lu\n", strlen((char *)data), size);
+	printf("arg@%p\n", arg);
 }
 
 int main(int argc, char **argv)
 {
-#if 0
-	int p[2];
-	pipe(p);
-
-	if (fork() == 0) {
-		prctl(PR_SET_NAME , "mcd-forker");
-		close(p[1]);
-		fcntl(p[0], F_SETFD, FD_CLOEXEC);
-		for (;;) {
-			int ret = 0;
-			char buf[256] = {0};
-			do {
-				ret = read(p[0], buf, sizeof(buf));
-				printf("buf:%s\n", buf);
-			} while (ret < 0 && errno == EINTR);
-			if (ret > 0) {
-				buf[ret] = '\0';
-				system(buf);
-			}
-		}
-	}
-	close(p[0]);
-	
-	printf("1./xxxxx file : %d\n", access("./xxxxx", F_OK) == 0);
-	FILE *fp = fopen("./xxxxx", "a+");
-	printf("2./xxxxx file : %d\n", access("./xxxxx", F_OK) == 0);
-#endif
-	_time();
-
-	//sleep(5);
-
-	//_time();
-
+	system_monotonic_time();
 	char buf[1024] = {0};
 	unsigned long mask;
 	if (!strcmp(argv[1], "server")) {
-	#if 0
-		pid_t pid = fork();
-
-		if (pid == 0) {
-			if (ipc_server_init(IPC_SERVER_BROKER, ipcServerHandler) < 0)
-			{
-				printf("server init error\n");
-				exit(-1);
-			}
-			if (ipc_server_run() < 0) {
-				printf("run error\n");
-				exit(-1);
-			}
-		}
-	#endif
 		signal(SIGCHLD, SIG_IGN);
 		pthread_t task_pid;
-		//struct ipc_timing test_timing = ipc_timing_initializer(test_timing, 0, 2,0,NULL,timing_handler);
-		//struct ipc_timing test_timing1 = ipc_timing_initializer(test_timing1, 1, 3,0,NULL,timing_handler1);
-		struct ipc_timing test_timing2 = ipc_timing_initializer(test_timing2, 1, 5,0,NULL,timing_handler2);
+		//struct ipc_timing test_timing2 = ipc_timing_initializer(test_timing2, 1, 5,0,NULL,timing_handler2);
 		if (ipc_server_init(IPC_TEST, test_ipc_handler) < 0)
 		{
 			printf("server init error\n");
@@ -204,16 +150,7 @@ int main(int argc, char **argv)
 		pthread_create(&task_pid, NULL, monitor_task, NULL);
 		int fd = sig_proxy_init();
 		ipc_server_proxy(fd, sig_proxy_handler, NULL);
-		//ipc_timing_register(&test_timing);
-		//ipc_timing_register(&test_timing1);
 		//ipc_timing_register(&test_timing2);
-#if 0
-		system("./a.out 1&");
-		//system("./a.out 2&");
-		//write(p[1], "./a.out 2&", strlen("./a.out 2&"));
-		if (send(p[1], "./a.out 3&", strlen("./a.out 2&"), MSG_DONTWAIT | MSG_NOSIGNAL) < 0)
-			printf("send error:%d\n", errno);
-#endif
 		printf("Run ---- \n");
 		g_start = time(NULL);
 		if (ipc_server_run() < 0) {
@@ -222,7 +159,7 @@ int main(int argc, char **argv)
 		}
 	} else if (!strcmp(argv[1], "client")) {
 		mask = strtoul(argv[2], NULL, 10);
-		const char *s = !strcmp(argv[3], "broker") ? IPC_BROKER : IPC_TEST;
+		const char *s = IPC_TEST;
 		struct ipc_subscriber *subscriber = ipc_subscriber_register(s, mask, NULL, 0, test_ipc_callback, NULL);
 
 		if (subscriber == NULL) {
@@ -236,7 +173,7 @@ int main(int argc, char **argv)
 
 	} else if (!strcmp(argv[1], "publisher")) {
 		mask = strtoul(argv[2], NULL, 10);
-		const char *s = !strcmp(argv[3], "broker") ? IPC_BROKER : IPC_TEST;
+		const char *s = IPC_TEST;
 		while (1) {
 			struct ipc_client *client = NULL;
 			client = ipc_client_create(s);

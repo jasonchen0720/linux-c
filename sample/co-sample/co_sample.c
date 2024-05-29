@@ -8,8 +8,8 @@
 #include "co_log.h"
 #include "co_core.h"
 #include "co_socket.h"
-#undef  LOG_TAG
-#define LOG_TAG "co-sample"
+#undef  __LOG_TAG
+#define __LOG_TAG "co-sample"
 #define CO_STACKSIZE	(16 * 1024)
 
 #define socket(a, b, c)		co_socket(a, b, c)

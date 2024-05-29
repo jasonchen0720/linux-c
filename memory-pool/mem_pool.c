@@ -8,7 +8,7 @@
 #define __GENERIC_DBG 1
 #include "generic_log.h"
 
-#define LOG_TAG "mem-pool"
+#define __LOG_TAG "mem-pool"
 #define LOG(format,...) LOGI(format"\n", ##__VA_ARGS__)
 #define DBG(format,...) LOGD(format"\n", ##__VA_ARGS__)
 

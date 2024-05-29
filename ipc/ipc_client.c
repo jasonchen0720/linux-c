@@ -345,6 +345,22 @@ out:
 	
 	return rc;
 }
+
+/**
+ * ipc_client_publishx - 
+ * Function: the same as ipc_client_publish()
+ * Differences: use the @msg buffer provided via caller, this can reduce copying and improve efficiency, when notify data is large.
+ *              caller should fill the data content of |ipc_notify->data|,
+ *              and provide its length contained in |ipc_notify->data| via parameter @data_len.
+ *              For convenience, caller can get the starting adress of |ipc_notify->data| using ipc_notify_payload_of(msg, struct ipc_notify).
+ */
+int ipc_client_publishx(struct ipc_client *client, struct ipc_msg *msg,
+		int to, unsigned long mask, int msg_id, int data_len)
+{
+	ipc_notify_fill(msg, to, mask, msg_id, data_len);
+	return ipc_request(client, msg, __data_len(msg), 0);
+}
+
 /**
  * ipc_subscriber_report - subscriber report a event message to server without response
  * @subscriber: subscriber handle
@@ -428,7 +444,7 @@ static void ipc_subscriber_destroy(struct ipc_subscriber *subscriber)
 static int ipc_subscriber_connect(struct ipc_subscriber *subscriber)
 {
 	int dynamic = 0;
-	char buffer[256] = {0};
+	char buffer[1024] = {0};
 	unsigned int sbuf = sizeof(buffer);
 	unsigned int size = sizeof(struct ipc_reg) + subscriber->data_len;
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;

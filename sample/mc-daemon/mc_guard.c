@@ -10,7 +10,7 @@
 #include "mc_guard_table.h"
 #include "generic_proc.h"
 #include "generic_file.h"
-#define LOG_TAG "guard"
+#define __LOG_TAG "guard"
 static const int __mc_guard_count = ARRAY_SIZE(__mc_guard);
 struct mc_guard * mc_guard_search(const char *name)
 {

@@ -90,8 +90,8 @@ client_handle *client_subscriber_register(int service, unsigned long topic_set, 
 {	
 	const char *broker = NULL;
 	switch(service) {
-		case WW_SERVICE_BROKER:
-			broker = IPC_SERVER_BROKER;
+		case WW_SERVICE_TEST:
+			broker = IPC_SERVER_TEST;
 			break;
 		default:
 			return NULL;

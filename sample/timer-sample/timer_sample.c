@@ -5,9 +5,9 @@
 #include "timer.h"
 #include "generic_log.h"
 
-#define LOG_FILE			"./timer-sample.log"
-#define LOG_SIZE			1024 * 1024
-#define LOG_TAG				"timer-sample"
+#define __LOG_FILE			"./timer-sample.log"
+#define __LOG_SIZE			1024 * 1024
+#define __LOG_TAG			"timer-sample"
 
 #define TMRS_MAX	8
 static struct timer_struct timers[TMRS_MAX] = {

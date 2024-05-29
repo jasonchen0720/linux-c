@@ -6,7 +6,7 @@
 #include "mc_log.h"
 
 
-#define LOG_TAG 	"exeception"
+#define __LOG_TAG 	"exeception"
 
 struct mc_einfo __mc_einfo = {{0}, {0}};
 

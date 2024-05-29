@@ -1,5 +1,5 @@
-#ifndef __BS_TREE_H__
-#define __BS_TREE_H__
+#ifndef __BST_H__
+#define __BST_H___
 
 #include <stddef.h>
 #define bst_entry(ptr, type, member)   \

@@ -10,7 +10,7 @@
 //#define WDON
 #define	WDIOC_SETTIMEOUT       _IOWR('W', 6, int)
 #define WDDEV   				"/dev/watchdog0"
-#define LOG_TAG 				"wdog"
+#define __LOG_TAG 				"wdog"
 
 static int watchdog_fd = -1;
 

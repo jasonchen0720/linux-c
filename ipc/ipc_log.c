@@ -25,8 +25,8 @@
 #include "ipc_log.h"
 #define IPC_LOG_PATH		"/tmp"
 #define IPC_LOG_FILE		IPC_LOG_PATH"/ipclog"
-#define IPC_LOG_SIZE 		256 * 1024
-#define IPC_LOG_NUM 		4
+#define IPC_LOG_SIZE 		128 * 1024
+#define IPC_LOG_NUM 		2
 #define IPC_LOG_LINE		256
 
 #define IPC_LOCK_INVALID		-1

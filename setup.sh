@@ -24,8 +24,9 @@ function buildall() {
 	install -m 755 -d $BIN_DIR
 	install -m 755 $PROJECT_ROOT/sample/mc-daemon/mcd          -D $BIN_DIR/
 	install -m 755 $PROJECT_ROOT/sample/mc-tools/mc-tools      -D $BIN_DIR/
-	install -m 755 $PROJECT_ROOT/sample/broker/broker          -D $BIN_DIR/
 	install -m 755 $PROJECT_ROOT/sample/*-sample/*-sample      -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/uapi/uapi                     -D $BIN_DIR/
+	install -m 755 $PROJECT_ROOT/uapi/broker                   -D $BIN_DIR/
 }
 
 function buildclean() {

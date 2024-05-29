@@ -596,7 +596,7 @@ static const char * peer_name(const struct ipc_server *sevr)
  * @core: ipc core of server
  * @sevr: handle to initialize
  */
-static inline void peer_sync(struct ipc_core *core, struct ipc_peer *peer)
+static inline void ipc_peer_node_init(struct ipc_core *core, struct ipc_peer *peer)
 {
 	int i;
 	int j = 0;
@@ -716,19 +716,21 @@ do {							\
 	if (send((sevr)->sock, (void *)(msg),  __data_len(msg), MSG_NOSIGNAL | MSG_DONTWAIT) < 0)	\
 		IPC_LOGE("send error:%s[%d],sk:%d,errno:%d.", peer_name(sevr), (sevr)->identity, (sevr)->sock, errno);	 \
 } while (0)
-#define msg_broadcast(node, head, msg)		\
+#define msg_broadcast(head, msg)		\
  do {										\
+ 	struct ipc_node *__node;\
 	(msg)->msg_id |= IPC_MSG_TOKEN;			\
-	list_for_each_entry(node, head, list) {	\
-		msg_report(node->sevr, msg);		\
+	list_for_each_entry(__node, head, list) {\
+		msg_report(__node->sevr, msg);		\
 	}										\
 } while (0)
-#define msg_unicast(node, head, msg, to)	\
+#define msg_unicast(head, msg, to)	\
 do {										\
+	struct ipc_node *__node;\
 	(msg)->msg_id |= IPC_MSG_TOKEN;			\
-	list_for_each_entry(node, head, list) {	\
-		if (node->sevr->identity == (to)) {	\
-			msg_report(node->sevr, msg);	\
+	list_for_each_entry(__node, head, list) {\
+		if (__node->sevr->identity == (to)) {\
+			msg_report(__node->sevr, msg);	\
 			break;							\
 		}									\
 	}										\
@@ -845,7 +847,7 @@ static int ipc_server_sync(struct ipc_core *core,
 	struct ipc_identity *tid = (struct ipc_identity *)msg->data;
 	IPC_LOGI("sync from client %d(%d) ,sk: %d, mask:%04lx",
 							sevr->identity, tid->identity, sevr->sock, peer->mask);
-	peer_sync(core, peer);
+	ipc_peer_node_init(core, peer);
 	ipc_server_manager(core, &peer->sevr, IPC_CLIENT_SYNC, msg->data);
 	return 0;
 }
@@ -880,7 +882,9 @@ static int ipc_server_unregister(struct ipc_core *core, struct ipc_server *sevr,
  */
 static int ipc_broker_publish(struct ipc_core *core, struct ipc_msg * msg)
 {
-	struct ipc_node *node;
+	/*
+	 * We do not clone new one, as we may get @msg from @notify by offset when calling ipc_server_forward()
+	 */
 	struct ipc_notify *notify = (struct ipc_notify *)msg->data;
 	if (!topic_check(notify->topic))
 		return -1;
@@ -901,9 +905,9 @@ static int ipc_broker_publish(struct ipc_core *core, struct ipc_msg * msg)
 
 	int i = bit_index(notify->topic);
 	if (notify->to == IPC_TO_BROADCAST)
-		msg_broadcast(node, &core->node_hb[i], msg);
+		msg_broadcast(&core->node_hb[i], msg);
 	else
-		msg_unicast(node, &core->node_hb[i], msg, notify->to);
+		msg_unicast(&core->node_hb[i], msg, notify->to);
 	return 0;
 }
 static int ipc_proxy_socket_handler(struct ipc_core *core, struct ipc_server *ipc)
@@ -1602,7 +1606,6 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, const void *data
 {
 	int dynamic = 0;
 	char buffer[IPC_NOTIFY_MSG_MAX_SIZE];
-	struct ipc_node *node;
 	struct ipc_msg *ipc_msg = (struct ipc_msg *)buffer;
 	struct ipc_core *core = current_core();
 	if (!ipc_core_running(core))
@@ -1625,15 +1628,48 @@ int ipc_server_publish(int to, unsigned long topic, int msg_id, const void *data
 	 */
 	if (core->node_hb) {
 		if (to == IPC_TO_BROADCAST)
-			msg_broadcast(node, &core->node_hb[i], ipc_msg);
+			msg_broadcast(&core->node_hb[i], ipc_msg);
 		else
-			msg_unicast(node, &core->node_hb[i], ipc_msg, to);
+			msg_unicast(&core->node_hb[i], ipc_msg, to);
 	}
 	ipc_mutex_unlock(core->mutex);
 	if (dynamic)
 		ipc_free_msg(ipc_msg);
 	return 0;
 }
+/**
+ * ipc_server_publishx - 
+ * Function: the same as ipc_server_publish()
+ * Differences: use the @msg buffer provided via caller, this can reduce copying and improve efficiency, when notify data is large.
+ *              caller should fill the data content of |ipc_notify->data|. 
+ *              and provide its length contained in |ipc_notify->data| via parameter @data_len.
+ *              For convenience, caller can get the starting adress of |ipc_notify->data| using ipc_notify_payload_of(msg, struct ipc_notify).
+ */
+int ipc_server_publishx(struct ipc_msg *msg,
+		int to, unsigned long mask, int msg_id, int data_len)
+{
+	struct ipc_core *core = current_core();
+	if (!ipc_core_running(core))
+		return -1;
+	if (!topic_check(mask))
+		return -1;
+	ipc_notify_fill(msg, to, mask, msg_id, data_len);
+	int i = bit_index(mask);
+	ipc_mutex_lock(core->mutex);
+	/*
+	 * Node hash bucket has not been initialized.
+	 * This indicates that no clients register to server.
+	 */
+	if (core->node_hb) {
+		if (to == IPC_TO_BROADCAST)
+			msg_broadcast(&core->node_hb[i], msg);
+		else
+			msg_unicast(&core->node_hb[i], msg, to);
+	}
+	ipc_mutex_unlock(core->mutex);
+	return 0;
+}
+
 /**
  * ipc_server_notify - if the server as broker, server can call this function to notify a client
  *  <!- Non-thread-safe, it is safely calling in context of handler passed by ipc_server_init(). Calling in other thread, 
@@ -1678,6 +1714,41 @@ int ipc_server_notify(const struct ipc_server *sevr, unsigned long topic, int ms
 	if (dynamic)
 		ipc_free_msg(ipc_msg);
 	return 0;
+}
+/**
+ * ipc_server_notifyx - 
+ * Function: the same as ipc_server_notify()
+ * Differences: use the @msg buffer provided via caller, this can reduce copying and improve efficiency, when notify data is large.
+ *              caller should fill the data content of |ipc_notify->data|. 
+ *              and provide its length contained in |ipc_notify->data| via parameter @data_len.
+ *              For convenience, caller can get the starting adress of |ipc_notify->data| using ipc_notify_payload_of(msg, struct ipc_notify).
+ */
+int ipc_server_notifyx(const struct ipc_server *sevr, 
+					struct ipc_msg *msg, unsigned long mask, int msg_id, int data_len)
+{
+	struct ipc_core *core = current_core();
+	if (!ipc_core_running(core))
+		return -1;
+	struct ipc_peer *peer = container_of(sevr, struct ipc_peer, sevr);
+	if (sevr->clazz != IPC_CLASS_SUBSCRIBER ||
+		!topic_check(mask) ||
+		!topic_isset(peer, mask))
+		return -1;	
+
+	/* Without client SYNC, client's callback may not get ready */
+	if (!peer->node[bit_count(peer->mask & (mask -1))].sevr) {
+		IPC_LOGE("client has not synchronized.");
+		return -1;
+	}	
+	ipc_notify_fill(msg, IPC_TO_NOTIFY, mask, msg_id, data_len);
+	msg_notify(sevr, msg);
+	return 0;
+}
+
+int ipc_server_forward(const struct ipc_server *sevr, struct ipc_notify *notify)
+{
+	struct ipc_msg *msg = (struct ipc_msg *)( (char *)notify - offsetof(struct ipc_msg, data) );
+	return send_msg(sevr->sock, msg) > 0 ? 0: -1;
 }
 static inline int set_opt_flt(struct ipc_core *core, void *arg)
 {
@@ -1833,7 +1904,7 @@ int ipc_server_bind(const struct ipc_server *sevr, int type, void *cookie)
  * @sevr: ipc handle for registered client.
  * return: zero or none zero.
  */
-int ipc_subscribed(const struct ipc_server *sevr, unsigned long mask)
+unsigned long ipc_subscribed(const struct ipc_server *sevr, unsigned long mask)
 {
 	assert(sevr->clazz == IPC_CLASS_SUBSCRIBER);
 	struct ipc_peer *peer = container_of(sevr, struct ipc_peer, sevr);

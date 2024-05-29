@@ -23,7 +23,7 @@ IFLAGS := \
 # All of the sources participating in the build are defined here
 LOCK_SRCS = ./lock.c
 RBT_SRCS = ./rb_tree.c 
-BST_SRCS = ./bs_tree.c
+BST_SRCS = ./bst.c
 
 CFG_SRCS = \
 ./gcl.c \

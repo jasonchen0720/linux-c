@@ -1,6 +1,5 @@
 SRCS += \
-./client/mc_client.c \
-./client/broker_client.c
+./client/mc_client.c
 
 ifeq ($(CONFIG_IPC),y)
 SRCS += ./client/ipcc.c

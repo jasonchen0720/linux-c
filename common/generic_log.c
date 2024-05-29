@@ -36,8 +36,10 @@ static struct logger_struct __logger = {
 static int __lock = LOCK_INVALID;
 #define LOGGER() 	(&__logger)
 #if 0
+#define lock_get()    ({ __typeof__(*(&__lock)) *_val = (&__lock); (*_val); })
 #define lock_cas(old_val, new_val) ({int __b = __lock == (old_val); if (__b) __lock = (new_val); __b; })
 #else
+#define lock_get()    ({ __typeof__(*(&__lock)) volatile *_val = (&__lock); __sync_synchronize(); (*_val); })
 #define lock_cas(old_val, new_val) (__sync_bool_compare_and_swap((&__lock), (old_val), (new_val)))
 #endif
 
@@ -92,7 +94,8 @@ static void log_debug(const char *format, ...)
 		printf("samlog.log IO error.\n");
 		return;
 	}
-	if (ftell(io) < 64 * 1024) {
+	fseek(io, 0L, SEEK_END);
+	if (ftell(io) < 32 * 1024) {
 		va_list ap;
 		va_start(ap, format);
 		char buf[LOG_LINE_MAX];
@@ -110,12 +113,26 @@ static int lock_init()
 	/* Process name which is trying to hold lock. */
 	log_pname(comm);
 
-	/* Thread-safe protection, set the lock status as initializing(LOCK_INITING) atomically. */
-	int doing = !lock_cas(LOCK_INVALID, LOCK_INITING);
-	if (doing) {
-		LOG("%s init:%d", comm, EINPROGRESS);
-		return -1;
-	}
+	int initing = 1;
+	do {
+		/* 
+		 * Thread-safe protection, set the lock status as initializing(LOCK_INITING) atomically. 
+		 */
+		int lock = lock_get();
+		switch (lock) {
+		case LOCK_INVALID:
+			if (lock_cas(LOCK_INVALID, LOCK_INITING)) {
+				initing = 0;
+				break;
+			}
+		case LOCK_INITING:
+			LOG("%s init: %d", comm, EINPROGRESS);
+			usleep(10000);
+			continue;
+		default:
+			return lock;
+		}
+	} while (initing);
 	int sem = -1;
     key_t key = ftok(LOG_PATH, 0x80);
     if (key == -1) {
@@ -193,8 +210,7 @@ static int log_unlock()
 }
 static void log_backup(int fd, int file_bakup, const char *file_path)
 {
-	if (log_lock() == -1)
-		return;
+	log_lock(); /* No matter success or fail, we have to do backup for the risk of full memory */
 	
 	char s[32];
 	char file[2][PATH_MAX + 1] = {{0}, {0}};
