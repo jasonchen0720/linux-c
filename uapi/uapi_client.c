@@ -421,10 +421,10 @@ int uapi_event_register(struct uapic_event *events, int count,
 		goto err;
 	}
 
-	buf[--offs] = '\0';
+	buf[offs - 1] = '\0';
 	subs->arg = arg;
 	subs->callback = callback;
-	LOGI("reg mask: %lx, event count: %d, subscriber@%p", UAPI_EVENT_MASK, regevent->count, subs);
+	LOGI("reg mask: %lx, event count: %d, size: %d, events: %s.", UAPI_EVENT_MASK, regevent->count, offs, regevent->events);
 	subs->subscriber = ipc_subscriber_register(UAPI_BROKER, UAPI_EVENT_MASK, buf, offs, uapic_event_callback, subs);
 	if (subs->subscriber == NULL) {
 		goto err;
