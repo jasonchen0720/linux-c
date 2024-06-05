@@ -444,12 +444,15 @@ err:
 		bst_remove(subs->table, &events[--i].node, 1);
 	return -1;
 }
-static int uapi_publish(struct ipc_msg *msg, int notify_len)
+static int uapi_publish(struct ipc_msg *msg, int notify_len, int dest)
 {
 	int ret;
+
+	if (dest == UAPI_BROADCAST)
+		dest = IPC_TO_BROADCAST;
 	if (uapic_subs) {
 		uapic_lock_acquire();
-		ret = ipc_client_publishx(&uapic_subs->subscriber->client, msg, IPC_TO_BROADCAST, 
+		ret = ipc_subscriber_publishx(uapic_subs->subscriber, msg, dest, 
 				UAPI_EVENT_MASK, 
 				UAPI_EVENT, notify_len);
 		uapic_lock_release();
@@ -460,7 +463,7 @@ static int uapi_publish(struct ipc_msg *msg, int notify_len)
 		if (ipc_client_init(UAPI_BROKER, &client) < 0) {
 			return -1;
 		}
-		ret = ipc_client_publishx(&client, msg, IPC_TO_BROADCAST, 
+		ret = ipc_client_publishx(&client, msg, dest, 
 				UAPI_EVENT_MASK, 
 				UAPI_EVENT, notify_len);
 		ipc_client_close(&client);
@@ -469,9 +472,16 @@ static int uapi_publish(struct ipc_msg *msg, int notify_len)
 	}
 }
 
-
-int uapi_event_push(const char *event, const char *json)
+/*
+ * @event: event name
+ * @json: event data if any, must keep as json format.
+ * @dest: peer's pid or UAPI_BROADCAST
+ */
+int uapi_event_push(const char *event, const char *json, int dest)
 {
+	if (dest < UAPI_BROADCAST) {
+		return -1;
+	}
 	if (strlen(event) > UAPI_EVENT_MAX_LENGTH) {
 		return -1;
 	}
@@ -495,9 +505,9 @@ int uapi_event_push(const char *event, const char *json)
 	strcpy(notify->event, event);
 	strcpy(notify->json, json);
 #if defined(VLA_SUPPORTED)
-	return uapi_publish((struct ipc_msg *)b, l);
+	return uapi_publish((struct ipc_msg *)b, l, dest);
 #else
-	int ret = uapi_publish((struct ipc_msg *)b, l);
+	int ret = uapi_publish((struct ipc_msg *)b, l, dest);
 	free(b);
 	return ret;
 #endif

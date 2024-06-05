@@ -113,9 +113,19 @@ static int uapi_broker_event_deliver(struct ipc_notify * notify, struct uapi_bro
 		LOGI("recvd event '%s' , data: %s", unotify->event, unotify->json);
 		const struct uapi_event *event_entry = bst_entry(n, struct uapi_event, node);
 		struct uapi_subscriber_node *node;
-		list_for_each_entry(node, &event_entry->head, list) {
-			LOGI("deliver event to %d", node->subscriber->sevr->identity);
-			ipc_server_forward(node->subscriber->sevr, notify);
+		if (notify->to == IPC_TO_BROADCAST) {
+			list_for_each_entry(node, &event_entry->head, list) {
+				LOGI("deliver event to %d", node->subscriber->sevr->identity);
+				ipc_server_forward(node->subscriber->sevr, notify);
+			}
+		} else {
+			list_for_each_entry(node, &event_entry->head, list) {
+				if (node->subscriber->sevr->identity != notify->to)
+					continue;
+				LOGI("notify event to %d", node->subscriber->sevr->identity);
+				ipc_server_forward(node->subscriber->sevr, notify);
+				break;
+			}
 		}
 	} else
 		LOGW("Not found any subscribers for event:%s", unotify->event);

@@ -20,6 +20,40 @@ struct mc_cltinfo
 };
 static struct mc_cltinfo *__mc_client = NULL;
 static pthread_mutex_t __mc_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int mc_client_push(unsigned long mask, int msgid, const void *data, int size)
+{
+	int ret;
+	if (__mc_client) {
+		ret = ipc_subscriber_publish(__mc_client->subscriber, IPC_TO_BROADCAST, mask, msgid, data, size);
+	} else {
+		struct ipc_client client;
+		if (ipc_client_init(MC_SERVER, &client) < 0) {
+			LOGE("client init failure.");
+			return -1;
+		}
+		ret = ipc_client_publish(&client, IPC_TO_BROADCAST, mask, msgid, data, size, 0);
+		ipc_client_close(&client);
+	}
+	return ret == IPC_REQUEST_SUCCESS ? 0 : -1;
+}
+
+static int mc_client_request_easy(struct ipc_msg *msg, size_t size, int tmo)
+{
+	struct ipc_client client;
+	if (ipc_client_init(MC_SERVER, &client) < 0) {
+		LOGE("client init failure.");
+		return -1;
+	}
+	if (ipc_client_request(&client, msg, size, tmo) < 0) {
+		LOGE("client request failure.");
+		ipc_client_close(&client);
+		return -1;
+	}
+	ipc_client_close(&client);
+	return 0;
+}
+
 static int mc_client_request(struct ipc_msg *msg, size_t size, int tmo)
 {
 	static struct ipc_client *client = NULL;
@@ -172,18 +206,10 @@ int mc_client_detach(const char *name, int identity, int state, int exit)
 	msg->flags 	 	= IPC_FLAG_REPLY;
 	msg->msg_id		= MC_MSG_DETACH;
 	msg->data_len	= sizeof(struct mc_detach);
-	
-	struct ipc_client client;
-	if (ipc_client_init(MC_SERVER, &client) < 0) {
-		LOGE("client init failure.");
-		return -1;
-	}
-	if (ipc_client_request(&client, msg, sizeof(buf), 1) < 0) {
+	if (mc_client_request_easy(msg, sizeof(buf), 1) < 0) {
 		LOGE("client request failure.");
-		ipc_client_close(&client);
 		return -1;
 	}
-	ipc_client_close(&client);
 	return !strcmp(msg->data, MC_STRING_TRUE);
 }
 int mc_client_restart(const char *name)
@@ -199,17 +225,10 @@ int mc_client_restart(const char *name)
 	msg->flags 	= IPC_FLAG_REPLY;
 	msg->msg_id = MC_MSG_RESTART;
 	msg->data_len = len + 1;
-	struct ipc_client client;
-	if (ipc_client_init(MC_SERVER, &client) < 0) {
-		LOGE("client init failure.");
-		return -1;
-	}
-	if (ipc_client_request(&client, msg, sizeof(buf), 5) < 0) {
+	if (mc_client_request_easy(msg, sizeof(buf), 5) < 0) {
 		LOGE("client request failure.");
-		ipc_client_close(&client);
 		return -1;
 	}
-	ipc_client_close(&client);
 	return !strcmp(msg->data, MC_STRING_TRUE);
 }
 
@@ -307,20 +326,8 @@ int mc_client_network_syn(int status)
 
 	char buf[8] = {0};
 	struct mc_evtval *evt = (struct mc_evtval *)buf;
-	struct ipc_client client;
-	if (ipc_client_init(MC_SERVER, &client) < 0) {
-		LOGE("client init failure.");
-		return -1;
-	}
-
 	evt->value = status;
-	
-	int ret =  ipc_client_publish(&client, IPC_TO_BROADCAST, 
-									MC_SYSTEM_MASK, MC_IND_SYS_NETWORK, evt, sizeof(*evt), 1);
-
-	ipc_client_close(&client);
-
-	return ret == IPC_REQUEST_SUCCESS ? 0 : -1;
+	return mc_client_push(MC_SYSTEM_MASK, MC_IND_SYS_NETWORK, evt, sizeof(*evt));
 }
 
 static int __mc_client_syn(int synid, void *data, int data_len, int tmo)

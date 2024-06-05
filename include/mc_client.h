@@ -4,7 +4,7 @@
 #include <sys/syscall.h>
 #include "mc_define.h"
 #define mc_gettid()					syscall(__NR_gettid)
-
+int mc_client_push(unsigned long mask, int msgid, const void *data, int size);
 int mc_client_register(unsigned long mask, struct mc_reginfo *info, 
 	int (*fn)(int, void *, int, void *), 
 	void *arg);

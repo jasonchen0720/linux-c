@@ -12,6 +12,7 @@
 char * uapi_method_list(const char *path, char *buff, size_t size, int tmo);
 char * uapi_method_invoke(const char *path, const char *method, const char *json, char *buf, size_t size, int tmo, int flags);
 
+#define UAPI_BROADCAST	0
 struct uapic_event {
 	const char *name; /* User defined, the length can not exceed UAPI_EVENT_MAX_LENGTH */
 	void (*callback)(void *data, size_t size, void *arg);
@@ -22,7 +23,7 @@ struct uapic_event {
 int uapi_event_register(struct uapic_event *events, int count,
 	void (*callback)(const char *event, void *data, size_t size, void *arg),
 	void *arg);
-int uapi_event_push(const char *event, const char *json);
+int uapi_event_push(const char *event, const char *json, int dest);
 
 #endif
 

@@ -83,8 +83,9 @@ static char * uapi_command_proc_event(int argc, char **argv)
 	const char *json 	= argc > 1 ? argv[1] : NULL;
 	if (event == NULL)
 		return uapi_command_proc_help(0, NULL);
-	
-	return uapi_event_push(event, json) < 0 ?  FAIL : DONE;
+
+	int dest = argc > 2 ? atoi(argv[2]) : UAPI_BROADCAST;
+	return uapi_event_push(event, json, dest) < 0 ?  FAIL : DONE;
 }
 static char * uapi_command_proc_list(int argc, char **argv)
 {

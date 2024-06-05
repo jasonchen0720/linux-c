@@ -47,4 +47,9 @@ struct ipc_subscriber *ipc_subscriber_register(const char *broker,
 void ipc_subscriber_unregister(struct ipc_subscriber *subscriber);
 int ipc_subscriber_report(struct ipc_subscriber *subscriber, struct ipc_msg *msg);
 int ipc_subscriber_request(struct ipc_subscriber *subscriber, struct ipc_msg *msg, unsigned int size, int tmo);
+#define ipc_subscriber_publish(subscriber, to, mask, msg_id, data, size) \
+	ipc_client_publish(&(subscriber)->client, to, mask, msg_id, data, size, 0)
+	
+#define ipc_subscriber_publishx(subscriber, msg, to, mask, msg_id, data_len) \
+	ipc_client_publishx(&(subscriber)->client, msg, to, mask, msg_id, data_len)
 #endif
